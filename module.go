@@ -27,7 +27,7 @@ var module = &Module{
 	filters:       make(map[string]Filter),
 	handlers:      make(map[string]Handler),
 	sites:         make(map[string]*Site),
-	siteHosts:     make(map[string]string),
+	siteAliases:   make(map[string]string),
 	defaultSite:   bamgoo.DEFAULT,
 }
 
@@ -50,7 +50,7 @@ type (
 		handlers map[string]Handler
 
 		sites       map[string]*Site
-		siteHosts   map[string]string
+		siteAliases map[string]string
 		defaultSite string
 
 		instance *Instance
@@ -80,6 +80,8 @@ type (
 
 		Domain  string
 		Domains []string
+		Alias   string
+		Aliases []string
 
 		Setting Map
 	}
@@ -109,6 +111,7 @@ type (
 		Cross   Cross
 		Setting Map
 		Hosts   []string
+		Aliases []string
 
 		routers  map[string]Router
 		filters  map[string]Filter
@@ -324,7 +327,7 @@ func (m *Module) Setup() {
 	}
 
 	m.sites = make(map[string]*Site, len(names))
-	m.siteHosts = make(map[string]string, len(names)*2)
+	m.siteAliases = make(map[string]string, len(names)*2)
 	m.defaultSite = bamgoo.DEFAULT
 
 	for name := range names {
@@ -345,6 +348,7 @@ func (m *Module) Setup() {
 			handlers: make(map[string]Handler),
 		}
 		site.Hosts = m.resolveSiteHosts(name, &site.Config)
+		site.Aliases = m.resolveSiteAliases(name, &site.Config)
 		m.sites[name] = site
 	}
 
@@ -393,15 +397,15 @@ func (m *Module) Setup() {
 	}
 
 	for _, site := range m.sites {
-		for _, host := range site.Hosts {
-			host = normalizeHost(host)
-			if host == "" {
+		for _, alias := range site.Aliases {
+			alias = normalizeAlias(alias)
+			if alias == "" {
 				continue
 			}
 			if bamgoo.Override() {
-				m.siteHosts[host] = site.Name
-			} else if _, ok := m.siteHosts[host]; !ok {
-				m.siteHosts[host] = site.Name
+				m.siteAliases[alias] = site.Name
+			} else if _, ok := m.siteAliases[alias]; !ok {
+				m.siteAliases[alias] = site.Name
 			}
 		}
 		m.buildSite(site)
@@ -543,7 +547,8 @@ func (m *Module) Open() {
 	for siteName, site := range m.sites {
 		for routeName, info := range site.routerInfos {
 			fullName := siteName + "." + routeName
-			if err := conn.Register(fullName, info, site.Hosts); err != nil {
+			// No host/domain restriction at router layer.
+			if err := conn.Register(fullName, info, nil); err != nil {
 				panic("Failed to register web route: " + err.Error())
 			}
 		}
@@ -631,17 +636,46 @@ func (m *Module) resolveSiteByHost(host string) string {
 	if host == "" {
 		return ""
 	}
-	if site, ok := m.siteHosts[host]; ok {
+	label := firstHostLabel(host)
+	if label == "" {
+		return ""
+	}
+	if site, ok := m.siteAliases[label]; ok {
 		return site
 	}
-	parts := strings.Split(host, ".")
-	for i := 1; i < len(parts); i++ {
-		pattern := "*." + strings.Join(parts[i:], ".")
-		if site, ok := m.siteHosts[pattern]; ok {
-			return site
+	return ""
+}
+
+func (m *Module) resolveSiteAliases(name string, cfg *Config) []string {
+	aliases := make([]string, 0, 4)
+	aliases = append(aliases, name)
+	aliases = append(aliases, parseStringList(cfg.Alias)...)
+	aliases = append(aliases, parseStringList(cfg.Aliases)...)
+
+	uniq := make([]string, 0, len(aliases))
+	exists := map[string]struct{}{}
+	for _, alias := range aliases {
+		alias = normalizeAlias(alias)
+		if alias == "" {
+			continue
+		}
+		if _, ok := exists[alias]; ok {
+			continue
+		}
+		exists[alias] = struct{}{}
+		uniq = append(uniq, alias)
+	}
+
+	if len(uniq) > 0 {
+		cfg.Alias = uniq[0]
+		if len(uniq) > 1 {
+			cfg.Aliases = uniq[1:]
+		} else {
+			cfg.Aliases = nil
 		}
 	}
-	return ""
+
+	return uniq
 }
 
 func (m *Module) resolveSiteHosts(name string, cfg *Config) []string {
@@ -752,6 +786,8 @@ func parseConfig(conf Map) Config {
 	cfg.Defaults = parseStringList(conf["defaults"])
 	cfg.Domain = firstString(parseStringList(conf["domain"]))
 	cfg.Domains = parseStringList(conf["domains"])
+	cfg.Alias = firstString(parseStringList(conf["alias"]))
+	cfg.Aliases = parseStringList(conf["aliases"])
 	if v, ok := conf["setting"].(Map); ok {
 		cfg.Setting = v
 	}
@@ -832,6 +868,12 @@ func mergeConfig(baseCfg, newCfg Config) Config {
 	if len(newCfg.Domains) > 0 {
 		out.Domains = newCfg.Domains
 	}
+	if newCfg.Alias != "" {
+		out.Alias = newCfg.Alias
+	}
+	if len(newCfg.Aliases) > 0 {
+		out.Aliases = newCfg.Aliases
+	}
 	if newCfg.Setting != nil {
 		out.Setting = newCfg.Setting
 	}
@@ -893,6 +935,32 @@ func normalizeHost(host string) string {
 		}
 	}
 	return strings.TrimSpace(host)
+}
+
+func normalizeAlias(alias string) string {
+	alias = strings.TrimSpace(strings.ToLower(alias))
+	if alias == "" {
+		return ""
+	}
+	if strings.Contains(alias, ".") {
+		alias = strings.SplitN(alias, ".", 2)[0]
+	}
+	return strings.TrimSpace(alias)
+}
+
+func firstHostLabel(host string) string {
+	host = normalizeHost(host)
+	if host == "" {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ""
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) == 0 {
+		return ""
+	}
+	return normalizeAlias(parts[0])
 }
 
 func splitPrefix(name string) (string, string) {

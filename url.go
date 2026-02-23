@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -192,18 +193,7 @@ func (u *webUrl) Site(name string, path string, options ...Map) string {
 		return path
 	}
 
-	host := ""
-	if len(site.Hosts) > 0 {
-		host = site.Hosts[0]
-	} else if site.Config.Domain != "" {
-		host = site.Config.Domain
-	} else if len(site.Config.Domains) > 0 {
-		host = site.Config.Domains[0]
-	} else if site.Config.Host != "" {
-		host = site.Config.Host
-	} else {
-		host = "localhost"
-	}
+	host := u.resolveSiteHost(name, site)
 
 	port := module.config.Port
 	if port <= 0 {
@@ -243,6 +233,54 @@ func (u *webUrl) Site(name string, path string, options ...Map) string {
 		path = "/" + path
 	}
 	return scheme + host + path
+}
+
+func (u *webUrl) resolveSiteHost(name string, site *Site) string {
+	// 1) explicit site domain first
+	if site.Config.Domain != "" {
+		return normalizeHost(site.Config.Domain)
+	}
+	if len(site.Config.Domains) > 0 && site.Config.Domains[0] != "" {
+		return normalizeHost(site.Config.Domains[0])
+	}
+
+	// 2) global web domain fallback => <site>.<web.domain>
+	if module.config.Domain != "" {
+		base := normalizeHost(module.config.Domain)
+		if base != "" {
+			return normalizeHost(name + "." + base)
+		}
+	}
+
+	// 3) no domain configured: use current host's main domain tail
+	//    e.g. current www.dev.com + target file => file.dev.com
+	if u.ctx != nil && u.ctx.Host != "" {
+		curr := normalizeHost(u.ctx.Host)
+		if tail := hostTail(curr); tail != "" {
+			return normalizeHost(name + "." + tail)
+		}
+	}
+
+	// 4) final fallback
+	if site.Config.Host != "" {
+		return normalizeHost(site.Config.Host)
+	}
+	return "localhost"
+}
+
+func hostTail(host string) string {
+	host = normalizeHost(host)
+	if host == "" {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ""
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts[1:], ".")
 }
 
 // RouteUrl shortcut
