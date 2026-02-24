@@ -1,13 +1,9 @@
 package web
 
 func (Router) RegistryComponent() string {
-	return "web.router"
+	return "web"
 }
 
-func (Filter) RegistryComponent() string {
-	return "web.filter"
-}
-
-func (Handler) RegistryComponent() string {
-	return "web.handler"
+func (Routers) RegistryComponent() string {
+	return "web"
 }
