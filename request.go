@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -62,13 +63,24 @@ func (site *Site) preprocessing(ctx *Context) {
 // finding handles static files.
 func (site *Site) finding(ctx *Context) {
 	if ctx.Name == "" {
-		file := resolveStaticFile(ctx.site.Config.Static, ctx.Path, ctx.site.Config.Defaults)
+		file := resolveStaticFile(ctx.site.Config.Static, ctx.Path, ctx.site.Config.Defaults, module.fsys)
 		if file == "" && module.config.Static != "" && module.config.Shared != "" {
 			sharedRoot := path.Join(module.config.Static, module.config.Shared)
-			file = resolveStaticFile(sharedRoot, ctx.Path, module.config.Defaults)
+			file = resolveStaticFile(sharedRoot, ctx.Path, module.config.Defaults, module.fsys)
 		}
 
 		if file != "" && !strings.Contains(file, "../") {
+			if module.fsys != nil {
+				bts, err := fs.ReadFile(module.fsys, file)
+				if err == nil {
+					ext := path.Ext(file)
+					if strings.HasPrefix(ext, ".") {
+						ext = ext[1:]
+					}
+					ctx.Binary(bts, bamgoo.Mimetype(ext, "application/octet-stream"))
+					return
+				}
+			}
 			ctx.File(file)
 		} else {
 			ctx.Found()
@@ -128,12 +140,29 @@ func (site *Site) crossing(ctx *Context) {
 	ctx.Next()
 }
 
-func resolveStaticFile(root, requestPath string, defaults []string) string {
+func resolveStaticFile(root, requestPath string, defaults []string, fsys fs.FS) string {
 	if root == "" {
 		return ""
 	}
 	cleanPath := path.Clean("/" + requestPath)
 	target := path.Join(root, cleanPath)
+
+	if fsys != nil {
+		if fi, err := fs.Stat(fsys, target); err == nil {
+			if fi.IsDir() {
+				for _, doc := range defaults {
+					docPath := path.Join(target, doc)
+					if ff, err := fs.Stat(fsys, docPath); err == nil && !ff.IsDir() {
+						return docPath
+					}
+				}
+				return ""
+			}
+			return target
+		}
+		return ""
+	}
+
 	fi, err := os.Stat(target)
 	if err != nil {
 		return ""
