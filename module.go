@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -592,6 +593,15 @@ func (m *Module) Start() {
 		}
 	}
 	m.started = true
+	routeCount := 0
+	for _, site := range m.sites {
+		routeCount += len(site.routers)
+	}
+	connCount := 0
+	if m.instance != nil && m.instance.connect != nil {
+		connCount = 1
+	}
+	fmt.Printf("bamgoo web module is running with %d connections, %d sites, %d routers.\n", connCount, len(m.sites), routeCount)
 }
 
 func (m *Module) Stop() {
