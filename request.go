@@ -64,10 +64,28 @@ func (site *Site) preprocessing(ctx *Context) {
 func (site *Site) finding(ctx *Context) {
 	if ctx.Name == "" {
 		fsys := bamgoo.AssetFS()
-		file := resolveStaticFile(ctx.site.Config.Static, ctx.Path, ctx.site.Config.Defaults, fsys)
-		if file == "" && module.config.Static != "" && module.config.Shared != "" {
-			sharedRoot := path.Join(module.config.Static, module.config.Shared)
-			file = resolveStaticFile(sharedRoot, ctx.Path, module.config.Defaults, fsys)
+		staticRoot := ctx.site.Config.Static
+		if staticRoot == "" {
+			staticRoot = "asset/statics"
+		}
+		file := resolveStaticFile(staticRoot, ctx.Path, ctx.site.Config.Defaults, fsys)
+		if file == "" {
+			sharedStaticRoot := module.config.Static
+			if sharedStaticRoot == "" {
+				sharedStaticRoot = "asset/statics"
+			}
+			sharedDir := module.config.Shared
+			if sharedDir == "" {
+				sharedDir = "shared"
+			}
+
+			defaults := module.config.Defaults
+			if len(defaults) == 0 {
+				defaults = ctx.site.Config.Defaults
+			}
+
+			sharedRoot := path.Join(sharedStaticRoot, sharedDir)
+			file = resolveStaticFile(sharedRoot, ctx.Path, defaults, fsys)
 		}
 
 		if file != "" && !strings.Contains(file, "../") {
@@ -143,7 +161,7 @@ func (site *Site) crossing(ctx *Context) {
 
 func resolveStaticFile(root, requestPath string, defaults []string, fsys fs.FS) string {
 	if root == "" {
-		return ""
+		root = "asset/statics"
 	}
 	cleanPath := path.Clean("/" + requestPath)
 	target := path.Join(root, cleanPath)
@@ -161,7 +179,7 @@ func resolveStaticFile(root, requestPath string, defaults []string, fsys fs.FS) 
 			}
 			return target
 		}
-		return ""
+		// fallback to local filesystem
 	}
 
 	fi, err := os.Stat(target)
