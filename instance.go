@@ -6,14 +6,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bamgoo/bamgoo"
-	. "github.com/bamgoo/base"
+	"github.com/infrago/infra"
+	. "github.com/infrago/base"
 )
 
 func (site *Site) newContext() *Context {
 	ctx := &Context{
 		site:        site,
-		Meta:        bamgoo.NewMeta(),
+		Meta:        infra.NewMeta(),
 		uploadfiles: make([]string, 0),
 		headers:     make(map[string]string, 0),
 		cookies:     make(map[string]http.Cookie, 0),
@@ -67,7 +67,7 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 		ctx.Host = ctx.reader.Host
 	}
 
-	span := ctx.Begin("web:"+ctx.Name, bamgoo.TraceAttrs("bamgoo", bamgoo.TraceKindWeb, ctx.Name, Map{
+	span := ctx.Begin("web:"+ctx.Name, infra.TraceAttrs("infrago", infra.TraceKindWeb, ctx.Name, Map{
 		"module":    "web",
 		"site":      site.Name,
 		"operation": "serve",
@@ -78,7 +78,7 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 	ctx.Header("traceparent", ctx.TraceParent())
 	defer func() {
 		if ctx.Code >= StatusInternalServerError {
-			span.End(bamgoo.Fail.With("web status %d", ctx.Code))
+			span.End(infra.Fail.With("web status %d", ctx.Code))
 			return
 		}
 		if res := ctx.Result(); res != nil && res.Fail() {

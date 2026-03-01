@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/bamgoo/base"
+	. "github.com/infrago/base"
 	"github.com/gorilla/mux"
 )
 

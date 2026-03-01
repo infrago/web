@@ -1,4 +1,4 @@
-module github.com/bamgoo/web
+module github.com/infrago/web
 
 go 1.25.3
 

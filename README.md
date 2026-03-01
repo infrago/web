@@ -1,2 +1,2 @@
 # web
-bamgoo web module.
+infrago web module.

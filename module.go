@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamgoo/bamgoo"
-	. "github.com/bamgoo/base"
+	"github.com/infrago/infra"
+	. "github.com/infrago/base"
 )
 
 func init() {
-	bamgoo.Mount(module)
+	infra.Mount(module)
 }
 
 var module = &Module{
@@ -30,11 +30,11 @@ var module = &Module{
 	handlers:      make(map[string]Handler),
 	sites:         make(map[string]*Site),
 	siteAliases:   make(map[string]string),
-	defaultSite:   bamgoo.DEFAULT,
+	defaultSite:   infra.DEFAULT,
 }
 
 func SetFS(fsys fs.FS) {
-	bamgoo.AssetFS(fsys)
+	infra.AssetFS(fsys)
 }
 
 type (
@@ -180,7 +180,7 @@ func (m *Module) RegisterDriver(name string, driver Driver) {
 		name = DEFAULT
 	}
 
-	if bamgoo.Override() {
+	if infra.Override() {
 		m.drivers[name] = driver
 	} else if _, ok := m.drivers[name]; !ok {
 		m.drivers[name] = driver
@@ -197,11 +197,11 @@ func (m *Module) RegisterConfig(name string, config Config) {
 	}
 
 	if name == "" {
-		name = bamgoo.DEFAULT
+		name = infra.DEFAULT
 	}
 
 	name = strings.ToLower(name)
-	if bamgoo.Override() {
+	if infra.Override() {
 		m.configs[name] = config
 	} else if _, ok := m.configs[name]; !ok {
 		m.configs[name] = config
@@ -239,7 +239,7 @@ func (m *Module) Config(global Map) {
 							}
 						}
 						if len(siteRoot) > 0 {
-							m.configureSite(bamgoo.DEFAULT, siteRoot)
+							m.configureSite(infra.DEFAULT, siteRoot)
 						}
 					}
 					continue
@@ -261,7 +261,7 @@ func (m *Module) Config(global Map) {
 				}
 			}
 			if len(root) > 0 {
-				m.configureSite(bamgoo.DEFAULT, root)
+				m.configureSite(infra.DEFAULT, root)
 			}
 		}
 	}
@@ -322,7 +322,7 @@ func (m *Module) Setup() {
 	m.config = mergeConfig(m.defaultConfig, m.config)
 	m.applyDefaults(&m.config)
 
-	names := map[string]struct{}{bamgoo.DEFAULT: {}}
+	names := map[string]struct{}{infra.DEFAULT: {}}
 	for name := range m.configs {
 		names[name] = struct{}{}
 	}
@@ -347,7 +347,7 @@ func (m *Module) Setup() {
 
 	m.sites = make(map[string]*Site, len(names))
 	m.siteAliases = make(map[string]string, len(names)*2)
-	m.defaultSite = bamgoo.DEFAULT
+	m.defaultSite = infra.DEFAULT
 
 	for name := range names {
 		baseCfg := mergeConfig(m.defaultConfig, m.config)
@@ -371,7 +371,7 @@ func (m *Module) Setup() {
 		m.sites[name] = site
 	}
 
-	if _, ok := m.sites[bamgoo.DEFAULT]; !ok {
+	if _, ok := m.sites[infra.DEFAULT]; !ok {
 		for name := range m.sites {
 			m.defaultSite = name
 			break
@@ -421,7 +421,7 @@ func (m *Module) Setup() {
 			if alias == "" {
 				continue
 			}
-			if bamgoo.Override() {
+			if infra.Override() {
 				m.siteAliases[alias] = site.Name
 			} else if _, ok := m.siteAliases[alias]; !ok {
 				m.siteAliases[alias] = site.Name
@@ -469,7 +469,7 @@ func (m *Module) applySiteDefaults(name string, cfg *Config) {
 		cfg.Static = m.config.Static
 	}
 	// Site-level static defaults to a site folder under global static root.
-	if m.config.Static != "" && cfg.Static == m.config.Static && name != bamgoo.DEFAULT {
+	if m.config.Static != "" && cfg.Static == m.config.Static && name != infra.DEFAULT {
 		cfg.Static = path.Join(m.config.Static, name)
 	}
 	if len(cfg.Defaults) == 0 {
@@ -601,7 +601,7 @@ func (m *Module) Start() {
 	if m.instance != nil && m.instance.connect != nil {
 		connCount = 1
 	}
-	fmt.Printf("bamgoo web module is running with %d connections, %d sites, %d routers.\n", connCount, len(m.sites), routeCount)
+	fmt.Printf("infrago web module is running with %d connections, %d sites, %d routers.\n", connCount, len(m.sites), routeCount)
 }
 
 func (m *Module) Stop() {
@@ -635,7 +635,7 @@ func (m *Module) Serve(name string, params Map, res http.ResponseWriter, req *ht
 	siteName, routerName := splitPrefix(name)
 
 	selected := ""
-	if siteName != "" && siteName != bamgoo.DEFAULT {
+	if siteName != "" && siteName != infra.DEFAULT {
 		if _, ok := m.sites[siteName]; ok {
 			selected = siteName
 		}
@@ -712,7 +712,7 @@ func (m *Module) resolveSiteHosts(name string, cfg *Config) []string {
 	hosts = append(hosts, parseStringList(cfg.Domains)...)
 
 	if len(hosts) == 0 && m.config.Domain != "" {
-		if name == bamgoo.DEFAULT {
+		if name == infra.DEFAULT {
 			hosts = append(hosts, m.config.Domain)
 		} else {
 			hosts = append(hosts, name+"."+m.config.Domain)
@@ -1000,5 +1000,5 @@ func splitPrefix(name string) (string, string) {
 		parts := strings.SplitN(name, ".", 2)
 		return parts[0], parts[1]
 	}
-	return bamgoo.DEFAULT, name
+	return infra.DEFAULT, name
 }

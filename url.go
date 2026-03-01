@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bamgoo/bamgoo"
-	. "github.com/bamgoo/base"
+	"github.com/infrago/infra"
+	. "github.com/infrago/base"
 )
 
 type webUrl struct {
@@ -50,7 +50,7 @@ func (u *webUrl) Route(name string, values ...Map) string {
 		if currSite != "" {
 			name = currSite + "." + name
 		} else {
-			name = bamgoo.DEFAULT + "." + name
+			name = infra.DEFAULT + "." + name
 		}
 	}
 
@@ -87,7 +87,7 @@ func (u *webUrl) Route(name string, values ...Map) string {
 
 	site := module.sites[siteName]
 	if site == nil {
-		site = module.sites[bamgoo.DEFAULT]
+		site = module.sites[infra.DEFAULT]
 	}
 	if site == nil {
 		return name
@@ -134,7 +134,7 @@ func (u *webUrl) Route(name string, values ...Map) string {
 		zone = u.ctx.Meta.Timezone()
 	}
 
-	_ = bamgoo.Mapping(argsConfig, dataArgsValues, dataParseValues, false, true, zone)
+	_ = infra.Mapping(argsConfig, dataArgsValues, dataParseValues, false, true, zone)
 
 	// merge parsed values
 	dataValues := Map{}
@@ -187,7 +187,7 @@ func (u *webUrl) Site(name string, path string, options ...Map) string {
 
 	site := module.sites[name]
 	if site == nil {
-		site = module.sites[bamgoo.DEFAULT]
+		site = module.sites[infra.DEFAULT]
 	}
 	if site == nil {
 		return path

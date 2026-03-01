@@ -8,14 +8,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bamgoo/bamgoo"
-	. "github.com/bamgoo/base"
+	"github.com/infrago/infra"
+	. "github.com/infrago/base"
 )
 
 type (
 	Context struct {
 		site *Site
-		*bamgoo.Meta
+		*infra.Meta
 
 		uploadfiles []string
 
