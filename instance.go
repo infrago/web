@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -68,7 +67,7 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 		ctx.Host = ctx.reader.Host
 	}
 
-	span := ctx.Begin("web:"+ctx.Name, bamgoo.TraceAttrs("bamgoo", bamgoo.TraceKindServer, ctx.Name, Map{
+	span := ctx.Begin("web:"+ctx.Name, bamgoo.TraceAttrs("bamgoo", bamgoo.TraceKindWeb, ctx.Name, Map{
 		"module":    "web",
 		"site":      site.Name,
 		"operation": "serve",
@@ -79,11 +78,11 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 	ctx.Header("traceparent", ctx.TraceParent())
 	defer func() {
 		if ctx.Code >= StatusInternalServerError {
-			span.End(fmt.Errorf("web status %d", ctx.Code))
+			span.End(bamgoo.Fail.With("web status %d", ctx.Code))
 			return
 		}
 		if res := ctx.Result(); res != nil && res.Fail() {
-			span.End(fmt.Errorf("%s", res.Error()))
+			span.End(res)
 			return
 		}
 		span.End()

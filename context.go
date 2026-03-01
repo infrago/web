@@ -217,7 +217,7 @@ func (ctx *Context) Text(text Any, args ...Any) {
 
 	real := ""
 	if res, ok := text.(Res); ok {
-		real = ctx.String(res.State(), res.Args()...)
+		real = ctx.String(res.Status(), res.Args()...)
 	} else if vv, ok := text.(string); ok {
 		real = vv
 	} else {
@@ -300,7 +300,7 @@ func (ctx *Context) Echo(res Res, args ...Any) {
 	text := ""
 	if res != nil {
 		code = res.Code()
-		text = ctx.String(res.State(), res.Args()...)
+		text = ctx.String(res.Status(), res.Args()...)
 	}
 
 	if res == nil || res.OK() {
