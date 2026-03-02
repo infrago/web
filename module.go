@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/infrago/infra"
 	. "github.com/infrago/base"
+	"github.com/infrago/infra"
 )
 
 func init() {
@@ -130,10 +130,12 @@ type (
 		executeFilters  []ctxFunc
 		responseFilters []ctxFunc
 
-		foundHandlers  []ctxFunc
-		errorHandlers  []ctxFunc
-		failedHandlers []ctxFunc
-		deniedHandlers []ctxFunc
+		notFoundHandlers []ctxFunc
+		errorHandlers    []ctxFunc
+		failedHandlers   []ctxFunc
+		unsignedHandlers []ctxFunc
+		unauthedHandlers []ctxFunc
+		deniedHandlers   []ctxFunc
 	}
 )
 
@@ -492,6 +494,7 @@ func (m *Module) buildSite(site *Site) {
 				Method: router.Method,
 				Uri:    uri,
 				Router: key,
+				Entry:  router.Key,
 				Args:   router.Args,
 			}
 		}
@@ -516,19 +519,27 @@ func (m *Module) buildSite(site *Site) {
 		}
 	}
 
-	site.foundHandlers = make([]ctxFunc, 0, len(site.handlers))
+	site.notFoundHandlers = make([]ctxFunc, 0, len(site.handlers))
 	site.errorHandlers = make([]ctxFunc, 0, len(site.handlers))
 	site.failedHandlers = make([]ctxFunc, 0, len(site.handlers))
+	site.unsignedHandlers = make([]ctxFunc, 0, len(site.handlers))
+	site.unauthedHandlers = make([]ctxFunc, 0, len(site.handlers))
 	site.deniedHandlers = make([]ctxFunc, 0, len(site.handlers))
 	for _, handler := range site.handlers {
-		if handler.Found != nil {
-			site.foundHandlers = append(site.foundHandlers, handler.Found)
+		if handler.NotFound != nil {
+			site.notFoundHandlers = append(site.notFoundHandlers, handler.NotFound)
 		}
 		if handler.Error != nil {
 			site.errorHandlers = append(site.errorHandlers, handler.Error)
 		}
 		if handler.Failed != nil {
 			site.failedHandlers = append(site.failedHandlers, handler.Failed)
+		}
+		if handler.Unsigned != nil {
+			site.unsignedHandlers = append(site.unsignedHandlers, handler.Unsigned)
+		}
+		if handler.Unauthed != nil {
+			site.unauthedHandlers = append(site.unauthedHandlers, handler.Unauthed)
 		}
 		if handler.Denied != nil {
 			site.deniedHandlers = append(site.deniedHandlers, handler.Denied)
@@ -632,17 +643,13 @@ func (m *Module) Close() {
 
 // Serve implements Delegate to dispatch by host/site.
 func (m *Module) Serve(name string, params Map, res http.ResponseWriter, req *http.Request) {
-	siteName, routerName := splitPrefix(name)
+	_, routerName := splitPrefix(name)
 
-	selected := ""
-	if siteName != "" && siteName != infra.DEFAULT {
-		if _, ok := m.sites[siteName]; ok {
-			selected = siteName
-		}
-	}
-	if selected == "" {
-		selected = m.resolveSiteByHost(req.Host)
-	}
+	// Site selection is host-only:
+	// - matched site alias => that site
+	// - unmatched/root/ip/localhost => empty(default) site
+	// Route name prefix must not override host routing.
+	selected := m.resolveSiteByHost(req.Host)
 	if selected == "" {
 		selected = m.defaultSite
 	}
@@ -991,10 +998,51 @@ func firstHostLabel(host string) string {
 	return normalizeAlias(parts[0])
 }
 
+func hostDomain(host string) string {
+	host = normalizeHost(host)
+	if host == "" {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ""
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return host
+	}
+	return strings.Join(parts[1:], ".")
+}
+
+func rootDomain(host string) string {
+	host = normalizeHost(host)
+	if host == "" {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ""
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return host
+	}
+	return strings.Join(parts[len(parts)-2:], ".")
+}
+
+func siteContextName(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" || name == strings.ToLower(infra.DEFAULT) {
+		return ""
+	}
+	return name
+}
+
 func splitPrefix(name string) (string, string) {
 	name = strings.ToLower(name)
 	if name == "" {
 		return "", ""
+	}
+	if strings.HasPrefix(name, ".") {
+		return infra.DEFAULT, strings.TrimPrefix(name, ".")
 	}
 	if strings.Contains(name, ".") {
 		parts := strings.SplitN(name, ".", 2)

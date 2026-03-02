@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/infrago/infra"
 	. "github.com/infrago/base"
+	"github.com/infrago/infra"
 )
 
 type (
@@ -49,6 +49,39 @@ type (
 	}
 	httpStatusBody string
 )
+
+func (site *Site) bodyFail(ctx *Context, err error) {
+	if err == nil {
+		return
+	}
+
+	ctx.Result(infra.Fail.With(err.Error()))
+
+	if ctx.output != nil && ctx.output.Committed() {
+		if ctx.Code <= 0 {
+			ctx.Code = ctx.output.Status()
+		}
+		return
+	}
+
+	if ctx.failedBody {
+		if ctx.Code <= 0 {
+			ctx.Code = StatusInternalServerError
+		}
+		ctx.writer.Header().Set("Content-Type", "text/plain; charset="+ctx.Charset())
+		ctx.writer.WriteHeader(ctx.Code)
+		_, _ = fmt.Fprint(ctx.writer, StatusText(ctx.Code))
+		return
+	}
+
+	ctx.failedBody = true
+	if ctx.Code <= 0 || ctx.Code < StatusInternalServerError {
+		ctx.Code = StatusInternalServerError
+	}
+	ctx.handling = "error"
+	site.handle(ctx)
+	site.body(ctx)
+}
 
 func (site *Site) body(ctx *Context) {
 	if ctx.Code <= 0 {
@@ -124,6 +157,9 @@ func (site *Site) bodyStatus(ctx *Context, body httpStatusBody) {
 }
 
 func (site *Site) bodyGoto(ctx *Context, body httpGotoBody) {
+	if ctx.Code <= 0 {
+		ctx.Code = StatusFound
+	}
 	http.Redirect(ctx.writer, ctx.reader, body.url, StatusFound)
 }
 
@@ -138,7 +174,9 @@ func (site *Site) bodyText(ctx *Context, body httpTextBody) {
 	res.Header().Set("Content-Type", fmt.Sprintf("%v; charset=%v", mimeType, ctx.Charset()))
 
 	res.WriteHeader(ctx.Code)
-	fmt.Fprint(res, body.text)
+	if _, err := fmt.Fprint(res, body.text); err != nil {
+		site.bodyFail(ctx, err)
+	}
 }
 
 func (site *Site) bodyHtml(ctx *Context, body httpHtmlBody) {
@@ -152,7 +190,9 @@ func (site *Site) bodyHtml(ctx *Context, body httpHtmlBody) {
 	res.Header().Set("Content-Type", fmt.Sprintf("%v; charset=%v", mimeType, ctx.Charset()))
 
 	res.WriteHeader(ctx.Code)
-	fmt.Fprint(res, body.html)
+	if _, err := fmt.Fprint(res, body.html); err != nil {
+		site.bodyFail(ctx, err)
+	}
 }
 
 func (site *Site) bodyJson(ctx *Context, body httpJsonBody) {
@@ -164,14 +204,16 @@ func (site *Site) bodyJson(ctx *Context, body httpJsonBody) {
 
 	bytes, err := json.Marshal(body.json)
 	if err != nil {
-		http.Error(res, err.Error(), StatusInternalServerError)
+		site.bodyFail(ctx, err)
 		return
 	}
 
 	mimeType := infra.Mimetype(ctx.Type, "application/json")
 	res.Header().Set("Content-Type", fmt.Sprintf("%v; charset=%v", mimeType, ctx.Charset()))
 	res.WriteHeader(ctx.Code)
-	fmt.Fprint(res, string(bytes))
+	if _, err := fmt.Fprint(res, string(bytes)); err != nil {
+		site.bodyFail(ctx, err)
+	}
 }
 
 func (site *Site) bodyJsonp(ctx *Context, body httpJsonpBody) {
@@ -183,7 +225,7 @@ func (site *Site) bodyJsonp(ctx *Context, body httpJsonpBody) {
 
 	bytes, err := json.Marshal(body.json)
 	if err != nil {
-		http.Error(res, err.Error(), StatusInternalServerError)
+		site.bodyFail(ctx, err)
 		return
 	}
 
@@ -191,7 +233,9 @@ func (site *Site) bodyJsonp(ctx *Context, body httpJsonpBody) {
 	res.Header().Set("Content-Type", fmt.Sprintf("%v; charset=%v", mimeType, ctx.Charset()))
 
 	res.WriteHeader(ctx.Code)
-	fmt.Fprintf(res, "%s(%s);", body.callback, string(bytes))
+	if _, err := fmt.Fprintf(res, "%s(%s);", body.callback, string(bytes)); err != nil {
+		site.bodyFail(ctx, err)
+	}
 }
 
 func (site *Site) bodyEcho(ctx *Context, body httpEchoBody) {
@@ -243,7 +287,9 @@ func (site *Site) bodyBinary(ctx *Context, body httpBinaryBody) {
 	}
 
 	res.WriteHeader(ctx.Code)
-	res.Write(body.bytes)
+	if _, err := res.Write(body.bytes); err != nil {
+		site.bodyFail(ctx, err)
+	}
 }
 
 func (site *Site) bodyBuffer(ctx *Context, body httpBufferBody) {
@@ -265,6 +311,8 @@ func (site *Site) bodyBuffer(ctx *Context, body httpBufferBody) {
 	}
 
 	res.WriteHeader(ctx.Code)
-	io.Copy(res, body.buffer)
+	if _, err := io.Copy(res, body.buffer); err != nil {
+		site.bodyFail(ctx, err)
+	}
 	body.buffer.Close()
 }

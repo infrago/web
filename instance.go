@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/infrago/infra"
 	. "github.com/infrago/base"
+	"github.com/infrago/infra"
 )
 
 func (site *Site) newContext() *Context {
@@ -41,13 +41,22 @@ func (site *Site) close(ctx *Context) {
 // Serve handles incoming HTTP request.
 func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *http.Request) {
 	ctx := site.newContext()
+	out := wrapResponseWriter(res)
 
 	ctx.reader = req
-	ctx.writer = res
+	ctx.writer = out
+	ctx.output = out
 
 	if info, ok := site.routerInfos[name]; ok {
-		ctx.Name = info.Router
+		if info.Entry != "" {
+			ctx.Name = info.Entry
+		} else {
+			ctx.Name = info.Router
+		}
 		if cfg, ok := site.routers[ctx.Name]; ok {
+			ctx.Config = cfg
+			ctx.Setting = cfg.Setting
+		} else if cfg, ok := site.routers[info.Router]; ok {
 			ctx.Config = cfg
 			ctx.Setting = cfg.Setting
 		}
@@ -66,6 +75,9 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 	} else {
 		ctx.Host = ctx.reader.Host
 	}
+	ctx.Site = siteContextName(site.Name)
+	ctx.Domain = hostDomain(ctx.Host)
+	ctx.RootDomain = rootDomain(ctx.Host)
 
 	span := ctx.Begin("web:"+ctx.Name, infra.TraceAttrs("infrago", infra.TraceKindWeb, ctx.Name, Map{
 		"module":    "web",
@@ -89,6 +101,9 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 	}()
 
 	site.open(ctx)
+	if ctx.output != nil && ctx.output.Committed() {
+		ctx.Code = ctx.output.Status()
+	}
 	site.close(ctx)
 }
 
@@ -111,7 +126,27 @@ func (site *Site) serve(ctx *Context) {
 
 	ctx.Next()
 
+	site.handle(ctx)
 	site.response(ctx)
+}
+
+func (site *Site) handle(ctx *Context) {
+	handling := ctx.handling
+	ctx.handling = ""
+	switch handling {
+	case "notfound":
+		site.notFound(ctx)
+	case "error":
+		site.error(ctx)
+	case "failed":
+		site.failed(ctx)
+	case "unsigned":
+		site.unsigned(ctx)
+	case "unauthed":
+		site.unauthed(ctx)
+	case "denied":
+		site.denied(ctx)
+	}
 }
 
 func (site *Site) request(ctx *Context) {
@@ -144,22 +179,21 @@ func (site *Site) response(ctx *Context) {
 	ctx.clear()
 
 	ctx.next(site.responseFilters...)
+	ctx.next(site.body)
 	ctx.Next()
-
-	site.body(ctx)
 }
 
-func (site *Site) found(ctx *Context) {
+func (site *Site) notFound(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
 		ctx.Code = StatusNotFound
 	}
 
-	if ctx.Config.Found != nil {
-		ctx.next(ctx.Config.Found)
+	if ctx.Config.NotFound != nil {
+		ctx.next(ctx.Config.NotFound)
 	}
-	ctx.next(site.foundHandlers...)
+	ctx.next(site.notFoundHandlers...)
 	ctx.next(site.foundDefault)
 
 	ctx.Next()
@@ -219,6 +253,40 @@ func (site *Site) denied(ctx *Context) {
 	if ctx.Config.Denied != nil {
 		ctx.next(ctx.Config.Denied)
 	}
+	ctx.next(site.deniedHandlers...)
+	ctx.next(site.deniedDefault)
+
+	ctx.Next()
+}
+
+func (site *Site) unsigned(ctx *Context) {
+	ctx.clear()
+
+	if ctx.Code <= 0 {
+		ctx.Code = StatusUnauthorized
+	}
+
+	if ctx.Config.Unsigned != nil {
+		ctx.next(ctx.Config.Unsigned)
+	}
+	ctx.next(site.unsignedHandlers...)
+	ctx.next(site.deniedHandlers...)
+	ctx.next(site.deniedDefault)
+
+	ctx.Next()
+}
+
+func (site *Site) unauthed(ctx *Context) {
+	ctx.clear()
+
+	if ctx.Code <= 0 {
+		ctx.Code = StatusUnauthorized
+	}
+
+	if ctx.Config.Unauthed != nil {
+		ctx.next(ctx.Config.Unauthed)
+	}
+	ctx.next(site.unauthedHandlers...)
 	ctx.next(site.deniedHandlers...)
 	ctx.next(site.deniedDefault)
 
