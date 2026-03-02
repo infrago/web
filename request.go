@@ -260,14 +260,14 @@ func containsString(vals []string, target string) bool {
 func (site *Site) authorizing(ctx *Context) {
 	if ctx.Config.Sign {
 		if !ctx.Signed() {
-			ctx.Unsign(infra.Unsigned)
+			ctx.Unsign()
 			return
 		}
 	}
 
 	if ctx.Config.Auth {
 		if !ctx.Authed() {
-			ctx.Unauth(infra.Unauthed)
+			ctx.Unauth()
 			return
 		}
 	}
