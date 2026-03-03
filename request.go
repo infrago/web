@@ -19,11 +19,14 @@ func (site *Site) preprocessing(ctx *Context) {
 	token := ""
 	if ctx.site.Config.Cookie != "" {
 		if c, e := ctx.reader.Cookie(ctx.site.Config.Cookie); e == nil {
-			token = c.Value
+			token = strings.TrimSpace(c.Value)
 		}
 	}
-	if vv := ctx.Header("Authorization"); vv != "" {
-		token = strings.TrimPrefix(vv, "Bearer ")
+	if vv := extractBearerToken(ctx.Header("Authorization")); vv != "" {
+		token = vv
+	}
+	if vv := extractBearerToken(ctx.Header("X-Forwarded-Access-Token")); vv != "" {
+		token = vv
 	}
 
 	if token != "" {
@@ -61,6 +64,17 @@ func (site *Site) preprocessing(ctx *Context) {
 	}
 
 	ctx.Next()
+}
+
+func extractBearerToken(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	if len(v) >= 7 && strings.EqualFold(v[0:7], "Bearer ") {
+		return strings.TrimSpace(v[7:])
+	}
+	return v
 }
 
 // finding handles static files.

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -124,6 +125,7 @@ type (
 		handlers map[string]Handler
 
 		routerInfos map[string]Info
+		routerOrder []string
 
 		serveFilters    []ctxFunc
 		requestFilters  []ctxFunc
@@ -484,14 +486,20 @@ func (m *Module) applySiteDefaults(name string, cfg *Config) {
 
 func (m *Module) buildSite(site *Site) {
 	site.routerInfos = make(map[string]Info)
-	for key, router := range site.routers {
+	keys := make([]string, 0, len(site.routers))
+	for key := range site.routers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		router := site.routers[key]
 		for i, uri := range router.Uris {
 			infoKey := key
 			if i > 0 {
 				infoKey = key + "." + strconv.Itoa(i)
 			}
 			site.routerInfos[infoKey] = Info{
-				Method: router.Method,
+				Method: router.method,
 				Uri:    uri,
 				Router: key,
 				Entry:  router.Key,
@@ -499,6 +507,35 @@ func (m *Module) buildSite(site *Site) {
 			}
 		}
 	}
+	site.routerOrder = make([]string, 0, len(site.routerInfos))
+	for key := range site.routerInfos {
+		site.routerOrder = append(site.routerOrder, key)
+	}
+	sort.SliceStable(site.routerOrder, func(i, j int) bool {
+		left := site.routerInfos[site.routerOrder[i]]
+		right := site.routerInfos[site.routerOrder[j]]
+
+		if left.Uri != right.Uri {
+			return left.Uri < right.Uri
+		}
+
+		leftWeight := 1
+		rightWeight := 1
+		if left.Method != "" {
+			leftWeight = 0
+		}
+		if right.Method != "" {
+			rightWeight = 0
+		}
+		if leftWeight != rightWeight {
+			return leftWeight < rightWeight
+		}
+		if left.Method != right.Method {
+			return left.Method < right.Method
+		}
+
+		return site.routerOrder[i] < site.routerOrder[j]
+	})
 
 	site.serveFilters = make([]ctxFunc, 0, len(site.filters))
 	site.requestFilters = make([]ctxFunc, 0, len(site.filters))
@@ -575,7 +612,8 @@ func (m *Module) Open() {
 	}
 
 	for siteName, site := range m.sites {
-		for routeName, info := range site.routerInfos {
+		for _, routeName := range site.routerOrder {
+			info := site.routerInfos[routeName]
 			fullName := siteName + "." + routeName
 			// No host/domain restriction at router layer.
 			if err := conn.Register(fullName, info, nil); err != nil {

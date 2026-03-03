@@ -97,10 +97,38 @@ func (site *Site) body(ctx *Context) {
 	for _, cookie := range ctx.cookies {
 		cookie.Path = "/"
 		cookie.HttpOnly = ctx.site.Config.HttpOnly
+		if ctx.site.Config.Domain != "" {
+			cookie.Domain = ctx.site.Config.Domain
+		}
+		if ctx.Domain != "" {
+			cookie.Domain = ctx.Domain
+		}
 		if ctx.site.Config.MaxAge > 0 {
 			cookie.MaxAge = int(ctx.site.Config.MaxAge.Seconds())
 		}
 		http.SetCookie(ctx.writer, &cookie)
+	}
+
+	// Issue latest token into configured cookie when ctx.Sign/NewSign is called.
+	if ctx.issue && ctx.site.Config.Cookie != "" {
+		if token := ctx.Token(); token != "" {
+			cookie := http.Cookie{
+				Name:     ctx.site.Config.Cookie,
+				Value:    token,
+				Path:     "/",
+				HttpOnly: ctx.site.Config.HttpOnly,
+			}
+			if ctx.site.Config.Domain != "" {
+				cookie.Domain = ctx.site.Config.Domain
+			}
+			if ctx.Domain != "" {
+				cookie.Domain = ctx.Domain
+			}
+			if ctx.site.Config.MaxAge > 0 {
+				cookie.MaxAge = int(ctx.site.Config.MaxAge.Seconds())
+			}
+			http.SetCookie(ctx.writer, &cookie)
+		}
 	}
 
 	switch body := ctx.Body.(type) {
