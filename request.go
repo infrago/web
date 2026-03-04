@@ -166,7 +166,7 @@ func (site *Site) crossing(ctx *Context) {
 				ctx.Header("Access-Control-Expose-Headers", header)
 			}
 
-			if ctx.Method == OPTIONS {
+			if strings.EqualFold(ctx.Method, OPTIONS) {
 				ctx.Text("cross domain access allowed.", http.StatusOK)
 				return
 			}
@@ -319,7 +319,7 @@ func (site *Site) parsing(ctx *Context) {
 		}
 	}
 
-	if ctx.Method != "GET" {
+	if !strings.EqualFold(ctx.Method, GET) {
 		ctype := ctx.Header("Content-Type")
 
 		if strings.Contains(ctype, "json") {
