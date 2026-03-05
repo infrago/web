@@ -22,12 +22,7 @@ func (m *Module) url() *webUrl {
 
 // Routo forces site base url.
 func (u *webUrl) Routo(name string, values ...Map) string {
-	vals := Map{}
-	if len(values) > 0 {
-		vals = values[0]
-	}
-	vals["[site]"] = true
-	return u.Route(name, vals)
+	return u.RouteUrl(name, values...)
 }
 
 // Route builds url by route name.
@@ -166,6 +161,139 @@ func (u *webUrl) Route(name string, values ...Map) string {
 	return uri
 }
 
+// RouteUri builds relative URI by route name.
+func (u *webUrl) RouteUri(name string, values ...Map) string {
+	name = strings.ToLower(name)
+	if strings.HasPrefix(name, "http://") || strings.HasPrefix(name, "https://") ||
+		strings.HasPrefix(name, "ws://") || strings.HasPrefix(name, "wss://") {
+		return name
+	}
+
+	currSite := ""
+	if u.ctx != nil && u.ctx.site != nil {
+		currSite = u.ctx.site.Name
+		if name == "" {
+			name = u.ctx.Name
+		}
+	}
+
+	if strings.Contains(name, ".") == false {
+		if currSite != "" {
+			name = currSite + "." + name
+		} else {
+			name = infra.DEFAULT + "." + name
+		}
+	}
+
+	params, querys := Map{}, Map{}
+	if len(values) > 0 {
+		for k, v := range values[0] {
+			if strings.HasPrefix(k, "{") && strings.HasSuffix(k, "}") {
+				params[k] = v
+			} else if strings.HasPrefix(k, "[") && strings.HasSuffix(k, "]") {
+				continue
+			} else {
+				querys[k] = v
+			}
+		}
+	}
+
+	siteName, routeName := splitPrefix(name)
+	if siteName == "*" {
+		if currSite != "" {
+			siteName = currSite
+		} else {
+			for s := range module.sites {
+				siteName = s
+				break
+			}
+		}
+	}
+	siteName = u.resolveSiteName(siteName)
+
+	site := module.sites[siteName]
+	if site == nil {
+		site = module.sites[infra.DEFAULT]
+	}
+	if site == nil {
+		return name
+	}
+
+	info, ok := findRouteInfo(site, routeName)
+	if !ok {
+		return name
+	}
+
+	argsConfig := Vars{}
+	if info.Args != nil {
+		for k, v := range info.Args {
+			argsConfig[k] = v
+		}
+	}
+
+	dataArgsValues, dataParseValues := Map{}, Map{}
+	for k, v := range params {
+		if strings.HasPrefix(k, "{") && strings.HasSuffix(k, "}") {
+			kk := strings.TrimSuffix(strings.TrimPrefix(k, "{"), "}")
+			dataArgsValues[kk] = v
+		} else {
+			dataArgsValues[k] = v
+			querys[k] = v
+		}
+	}
+
+	zone := time.Local
+	if u.ctx != nil && u.ctx.Meta != nil {
+		zone = u.ctx.Meta.Timezone()
+	}
+
+	_ = infra.Mapping(argsConfig, dataArgsValues, dataParseValues, false, true, zone)
+
+	dataValues := Map{}
+	for k, v := range dataParseValues {
+		dataValues[k] = v
+	}
+
+	uri := info.Uri
+	re := regexp.MustCompile(`\{[^}]+\}`)
+	uri = re.ReplaceAllStringFunc(uri, func(m string) string {
+		key := strings.TrimSuffix(strings.TrimPrefix(m, "{"), "}")
+		if v, ok := dataValues[key]; ok {
+			return fmt.Sprintf("%v", v)
+		}
+		if v, ok := params[m]; ok {
+			return fmt.Sprintf("%v", v)
+		}
+		return ""
+	})
+
+	if len(querys) > 0 {
+		q := url.Values{}
+		for k, v := range querys {
+			q.Set(k, fmt.Sprintf("%v", v))
+		}
+		if strings.Contains(uri, "?") {
+			uri = uri + "&" + q.Encode()
+		} else {
+			uri = uri + "?" + q.Encode()
+		}
+	}
+
+	return uri
+}
+
+// RouteUrl builds absolute URL by route name.
+func (u *webUrl) RouteUrl(name string, values ...Map) string {
+	vals := Map{}
+	if len(values) > 0 && values[0] != nil {
+		for k, v := range values[0] {
+			vals[k] = v
+		}
+	}
+	vals["[site]"] = true
+	return u.Route(name, vals)
+}
+
 func findRouteInfo(site *Site, routeName string) (Info, bool) {
 	if site == nil || routeName == "" {
 		return Info{}, false
@@ -262,6 +390,11 @@ func (u *webUrl) Site(name string, path string, options ...Map) string {
 	return scheme + host + path
 }
 
+// SiteUrl builds absolute site URL with path.
+func (u *webUrl) SiteUrl(name, path string, options ...Map) string {
+	return u.Site(name, path, options...)
+}
+
 func (u *webUrl) resolveSiteHost(name string, site *Site) string {
 	// Prefer current request domain tail first, so RouteUrl follows current domain.
 	if u.ctx != nil && u.ctx.Host != "" {
@@ -325,10 +458,15 @@ func hostTail(host string) string {
 
 // RouteUrl shortcut
 func RouteUrl(name string, values ...Map) string {
-	return module.url().Route(name, values...)
+	return module.url().RouteUrl(name, values...)
+}
+
+// RouteUri shortcut
+func RouteUri(name string, values ...Map) string {
+	return module.url().RouteUri(name, values...)
 }
 
 // SiteUrl shortcut
 func SiteUrl(name, path string, options ...Map) string {
-	return module.url().Site(name, path, options...)
+	return module.url().SiteUrl(name, path, options...)
 }

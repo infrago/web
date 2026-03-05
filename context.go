@@ -60,8 +60,6 @@ type (
 		Data Map
 		Body Any
 
-		Url webUrl
-
 		handling   string
 		failedBody bool
 	}
@@ -258,6 +256,18 @@ func (ctx *Context) Agent() string {
 	return ctx.Header("User-Agent")
 }
 
+func (ctx *Context) RouteUri(name string, values ...Map) string {
+	return (&webUrl{ctx: ctx}).RouteUri(name, values...)
+}
+
+func (ctx *Context) RouteUrl(name string, values ...Map) string {
+	return (&webUrl{ctx: ctx}).RouteUrl(name, values...)
+}
+
+func (ctx *Context) SiteUrl(name, path string, options ...Map) string {
+	return (&webUrl{ctx: ctx}).SiteUrl(name, path, options...)
+}
+
 // Response methods
 
 func (ctx *Context) clearBody() {
@@ -354,6 +364,38 @@ func (ctx *Context) Buffer(buffer io.ReadCloser, size int64, args ...string) {
 	ctx.clearBody()
 	name := ctx.fileTyping(args...)
 	ctx.Body = httpBufferBody{buffer, size, name}
+}
+
+// View renders template by view module.
+// args can include: int(status code), string(mime), Map(model).
+func (ctx *Context) View(view string, args ...Any) {
+	ctx.clearBody()
+
+	code := 0
+	mime := ""
+	var model Map
+	for _, arg := range args {
+		switch vv := arg.(type) {
+		case int:
+			code = vv
+		case string:
+			mime = vv
+		case Map:
+			model = vv
+		}
+	}
+
+	if code > 0 {
+		ctx.Code = code
+	}
+	if mime != "" {
+		ctx.Type = mime
+	}
+	if ctx.Type == "" {
+		ctx.Type = "html"
+	}
+
+	ctx.Body = httpViewBody{view: view, model: model}
 }
 
 func (ctx *Context) fileTyping(args ...string) string {

@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	. "github.com/infrago/base"
 	"github.com/infrago/infra"
+	"github.com/infrago/view"
 )
 
 type (
@@ -46,6 +48,10 @@ type (
 		buffer io.ReadCloser
 		size   int64
 		name   string
+	}
+	httpViewBody struct {
+		view  string
+		model Map
 	}
 	httpStatusBody string
 )
@@ -154,6 +160,8 @@ func (site *Site) body(ctx *Context) {
 		site.bodyBinary(ctx, body)
 	case httpBufferBody:
 		site.bodyBuffer(ctx, body)
+	case httpViewBody:
+		site.bodyView(ctx, body)
 	case httpStatusBody:
 		site.bodyStatus(ctx, body)
 	default:
@@ -343,4 +351,71 @@ func (site *Site) bodyBuffer(ctx *Context, body httpBufferBody) {
 		site.bodyFail(ctx, err)
 	}
 	body.buffer.Close()
+}
+
+func (site *Site) bodyView(ctx *Context, body httpViewBody) {
+	res := ctx.writer
+
+	viewData := Map{
+		"config":  ctx.site.Config,
+		"setting": ctx.site.Setting,
+		"args":    ctx.Args,
+		"value":   ctx.Value,
+		"locals":  ctx.Locals,
+		"data":    ctx.Data,
+		"model":   body.model,
+	}
+
+	html, err := view.Parse(view.Body{
+		View:     body.view,
+		Site:     site.Name,
+		Helpers:  site.viewHelpers(ctx),
+		Language: ctx.Language(),
+		Timezone: ctx.Timezone(),
+		Data:     viewData,
+		Model:    body.model,
+	})
+	if err != nil {
+		site.bodyFail(ctx, err)
+		return
+	}
+
+	mimeType := infra.Mimetype(ctx.Type, "text/html")
+	res.Header().Set("Content-Type", fmt.Sprintf("%v; charset=%v", mimeType, ctx.Charset()))
+	res.WriteHeader(ctx.Code)
+	if _, err := fmt.Fprint(res, html); err != nil {
+		site.bodyFail(ctx, err)
+	}
+}
+
+func (site *Site) viewHelpers(ctx *Context) Map {
+	zone := ctx.Timezone()
+	return Map{
+		"language": func() string {
+			return ctx.Language()
+		},
+		"timezone": func() string {
+			return zone.String()
+		},
+		"format": func(format string, args ...interface{}) string {
+			if len(args) == 1 {
+				switch vv := args[0].(type) {
+				case time.Time:
+					return vv.In(zone).Format(format)
+				case int64:
+					// unix seconds range guard
+					if vv >= 31507200 && vv <= 31507200000 {
+						return time.Unix(vv, 0).In(zone).Format(format)
+					}
+				}
+			}
+			return fmt.Sprintf(format, args...)
+		},
+		"string": func(key string, args ...Any) string {
+			return ctx.String(strings.ReplaceAll(key, ".", "_"), args...)
+		},
+		"ctx": func() *Context {
+			return ctx
+		},
+	}
 }

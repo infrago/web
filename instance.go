@@ -11,7 +11,7 @@ import (
 )
 
 func (site *Site) newContext() *Context {
-	ctx := &Context{
+	return &Context{
 		site:        site,
 		Meta:        infra.NewMeta(),
 		uploadfiles: make([]string, 0),
@@ -28,8 +28,6 @@ func (site *Site) newContext() *Context {
 		Data:        Map{},
 		Setting:     Map{},
 	}
-	ctx.Url = webUrl{ctx: ctx}
-	return ctx
 }
 
 func (site *Site) close(ctx *Context) {
