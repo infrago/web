@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -130,46 +131,39 @@ func (site *Site) finding(ctx *Context) {
 // crossing handles CORS.
 func (site *Site) crossing(ctx *Context) {
 	cross := ctx.site.Cross
+	if !cross.Allow {
+		ctx.Next()
+		return
+	}
 
-	if cross.Allow {
-		origin := ctx.Header("Origin")
-		originPassed := false
+	allowOrigins := mergeAllow(cross.Origin, cross.Origins)
+	allowMethods := mergeAllow(cross.Method, cross.Methods)
+	allowHeaders := mergeAllow(cross.Header, cross.Headers)
 
-		if cross.Origin == "*" || cross.Origin == "" || containsString(cross.Origins, "*") {
-			originPassed = true
-		} else if origin != "" && containsOrigin(cross.Origins, origin) {
-			originPassed = true
+	origin := ctx.Header("Origin")
+	method := ctx.Header("Access-Control-Request-Method")
+	header := ctx.Header("Access-Control-Request-Headers")
+
+	originPassed := originAllowed(origin, allowOrigins)
+	methodPassed := valuesAllowed(splitCSV(method), allowMethods)
+	headerPassed := valuesAllowed(splitCSV(header), allowHeaders)
+
+	if originPassed && methodPassed && headerPassed {
+		ctx.Header("Access-Control-Allow-Credentials", "true")
+		if origin != "" {
+			ctx.Header("Access-Control-Allow-Origin", origin)
+		}
+		if method != "" {
+			ctx.Header("Access-Control-Allow-Methods", method)
+		}
+		if header != "" {
+			ctx.Header("Access-Control-Allow-Headers", header)
+			ctx.Header("Access-Control-Expose-Headers", header)
 		}
 
-		method := ctx.Header("Access-Control-Request-Method")
-		methodPassed := cross.Method == "*" || cross.Method == "" || containsString(cross.Methods, "*")
-		if !methodPassed {
-			methodPassed = method == "" || containsAll(splitCSV(method), cross.Methods)
-		}
-
-		header := ctx.Header("Access-Control-Request-Headers")
-		headerPassed := cross.Header == "*" || cross.Header == "" || containsString(cross.Headers, "*")
-		if !headerPassed {
-			headerPassed = header == "" || containsAll(splitCSV(header), cross.Headers)
-		}
-
-		if originPassed && methodPassed && headerPassed {
-			ctx.Header("Access-Control-Allow-Credentials", "true")
-			if origin != "" {
-				ctx.Header("Access-Control-Allow-Origin", origin)
-			}
-			if method != "" {
-				ctx.Header("Access-Control-Allow-Methods", method)
-			}
-			if header != "" {
-				ctx.Header("Access-Control-Allow-Headers", header)
-				ctx.Header("Access-Control-Expose-Headers", header)
-			}
-
-			if strings.EqualFold(ctx.Method, OPTIONS) {
-				ctx.Text("cross domain access allowed.", http.StatusOK)
-				return
-			}
+		if strings.EqualFold(ctx.Method, OPTIONS) {
+			ctx.Text("cross domain access allowed.", http.StatusOK)
+			return
 		}
 	}
 
@@ -247,13 +241,44 @@ func containsAll(got []string, allow []string) bool {
 }
 
 func containsOrigin(origins []string, origin string) bool {
-	origin = strings.ToLower(strings.TrimSpace(origin))
+	origin = normalizeOrigin(origin)
+	if origin == "" {
+		return false
+	}
+	originScheme, originHost, ok := parseOrigin(origin)
+	if !ok {
+		return false
+	}
+
 	for _, item := range origins {
-		item = strings.ToLower(strings.TrimSpace(item))
-		if item == "" {
+		pattern := normalizeOrigin(item)
+		if pattern == "" {
 			continue
 		}
-		if origin == item || strings.HasPrefix(origin, item) {
+		if pattern == "*" || pattern == origin {
+			return true
+		}
+
+		patternScheme, patternHost, parsed := parseOrigin(pattern)
+		if parsed {
+			if strings.HasPrefix(patternHost, "*.") {
+				base := strings.TrimPrefix(patternHost, "*.")
+				if patternScheme == originScheme && wildcardHostMatch(originHost, base) {
+					return true
+				}
+			}
+			continue
+		}
+
+		if strings.HasPrefix(pattern, "*.") {
+			base := strings.TrimPrefix(pattern, "*.")
+			if wildcardHostMatch(originHost, base) {
+				return true
+			}
+			continue
+		}
+
+		if originHost == normalizeHost(pattern) {
 			return true
 		}
 	}
@@ -268,6 +293,67 @@ func containsString(vals []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func mergeAllow(primary string, extras []string) []string {
+	out := make([]string, 0, len(extras)+1)
+	if primary != "" {
+		out = append(out, primary)
+	}
+	out = append(out, extras...)
+	return out
+}
+
+func valuesAllowed(requested []string, allow []string) bool {
+	if len(requested) == 0 {
+		return true
+	}
+	if len(allow) == 0 || containsString(allow, "*") {
+		return true
+	}
+	return containsAll(requested, allow)
+}
+
+func originAllowed(origin string, allow []string) bool {
+	origin = normalizeOrigin(origin)
+	if origin == "" {
+		return true
+	}
+	if len(allow) == 0 || containsString(allow, "*") {
+		return true
+	}
+	return containsOrigin(allow, origin)
+}
+
+func normalizeOrigin(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	return strings.TrimSuffix(v, "/")
+}
+
+func parseOrigin(v string) (scheme, host string, ok bool) {
+	u, err := url.Parse(v)
+	if err != nil || u == nil {
+		return "", "", false
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", "", false
+	}
+
+	host = normalizeHost(u.Host)
+	if host == "" {
+		return "", "", false
+	}
+
+	return strings.ToLower(u.Scheme), host, true
+}
+
+func wildcardHostMatch(host, base string) bool {
+	host = normalizeHost(host)
+	base = normalizeHost(base)
+	if host == "" || base == "" || host == base {
+		return false
+	}
+	return strings.HasSuffix(host, "."+base)
 }
 
 // authorizing handles authentication.

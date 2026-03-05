@@ -91,6 +91,10 @@ type (
 		Aliases []string
 
 		Setting Map
+
+		tokenSet    bool
+		cryptoSet   bool
+		httpOnlySet bool
 	}
 
 	Configs map[string]Config
@@ -615,7 +619,6 @@ func (m *Module) Open() {
 		for _, routeName := range site.routerOrder {
 			info := site.routerInfos[routeName]
 			fullName := siteName + "." + routeName
-			// No host/domain restriction at router layer.
 			if err := conn.Register(fullName, info, nil); err != nil {
 				panic("Failed to register web route: " + err.Error())
 			}
@@ -681,19 +684,23 @@ func (m *Module) Close() {
 
 // Serve implements Delegate to dispatch by host/site.
 func (m *Module) Serve(name string, params Map, res http.ResponseWriter, req *http.Request) {
-	_, routerName := splitPrefix(name)
-
-	// Site selection is host-only:
-	// - matched site alias => that site
-	// - unmatched/root/ip/localhost => empty(default) site
-	// Route name prefix must not override host routing.
-	selected := m.resolveSiteByHost(req.Host)
-	if selected == "" {
-		selected = m.defaultSite
-	}
+	selected, routerName := m.selectSiteForRequest(name, req.Host)
 	site := m.sites[selected]
 	if site == nil {
 		return
+	}
+	site.Serve(routerName, params, res, req)
+}
+
+func (m *Module) selectSiteForRequest(name, host string) (string, string) {
+	_, routerName := splitPrefix(name)
+
+	// Site selection is host-driven:
+	// - matched site alias => that site
+	// - unmatched subdomain/ip/localhost => default(empty) site
+	selected := m.resolveSiteByHost(host)
+	if selected == "" {
+		selected = m.defaultSite
 	}
 
 	if name == "" {
@@ -701,7 +708,8 @@ func (m *Module) Serve(name string, params Map, res http.ResponseWriter, req *ht
 	} else if routerName == "" {
 		routerName = name
 	}
-	site.Serve(routerName, params, res, req)
+
+	return selected, routerName
 }
 
 func (m *Module) resolveSiteByHost(host string) string {
@@ -824,6 +832,7 @@ func parseConfig(conf Map) Config {
 	}
 	if v, ok := conf["token"].(bool); ok {
 		cfg.Token = v
+		cfg.tokenSet = true
 	}
 	if v, ok := conf["expire"]; ok {
 		if d := parseDuration(v); d > 0 {
@@ -832,6 +841,7 @@ func parseConfig(conf Map) Config {
 	}
 	if v, ok := conf["crypto"].(bool); ok {
 		cfg.Crypto = v
+		cfg.cryptoSet = true
 	}
 	if v, ok := conf["maxage"]; ok {
 		if d := parseDuration(v); d > 0 {
@@ -840,6 +850,7 @@ func parseConfig(conf Map) Config {
 	}
 	if v, ok := conf["httponly"].(bool); ok {
 		cfg.HttpOnly = v
+		cfg.httpOnlySet = true
 	}
 	if v, ok := conf["upload"].(string); ok {
 		cfg.Upload = v
@@ -851,10 +862,25 @@ func parseConfig(conf Map) Config {
 		cfg.Shared = v
 	}
 	cfg.Defaults = parseStringList(conf["defaults"])
-	cfg.Domain = firstString(parseStringList(conf["domain"]))
-	cfg.Domains = parseStringList(conf["domains"])
-	cfg.Alias = firstString(parseStringList(conf["alias"]))
-	cfg.Aliases = parseStringList(conf["aliases"])
+
+	domains := append([]string{}, parseStringList(conf["domain"])...)
+	domains = append(domains, parseStringList(conf["domains"])...)
+	if len(domains) > 0 {
+		cfg.Domain = domains[0]
+		if len(domains) > 1 {
+			cfg.Domains = domains[1:]
+		}
+	}
+
+	aliases := append([]string{}, parseStringList(conf["alias"])...)
+	aliases = append(aliases, parseStringList(conf["aliases"])...)
+	if len(aliases) > 0 {
+		cfg.Alias = aliases[0]
+		if len(aliases) > 1 {
+			cfg.Aliases = aliases[1:]
+		}
+	}
+
 	if v, ok := conf["setting"].(Map); ok {
 		cfg.Setting = v
 	}
@@ -943,20 +969,32 @@ func mergeConfig(baseCfg, newCfg Config) Config {
 	if newCfg.Cookie != "" {
 		out.Cookie = newCfg.Cookie
 	}
-	if newCfg.Token {
+	if newCfg.tokenSet {
+		out.Token = newCfg.Token
+		out.tokenSet = true
+	} else if newCfg.Token {
 		out.Token = true
+		out.tokenSet = true
 	}
 	if newCfg.Expire != 0 {
 		out.Expire = newCfg.Expire
 	}
-	if newCfg.Crypto {
+	if newCfg.cryptoSet {
+		out.Crypto = newCfg.Crypto
+		out.cryptoSet = true
+	} else if newCfg.Crypto {
 		out.Crypto = true
+		out.cryptoSet = true
 	}
 	if newCfg.MaxAge != 0 {
 		out.MaxAge = newCfg.MaxAge
 	}
-	if newCfg.HttpOnly {
+	if newCfg.httpOnlySet {
+		out.HttpOnly = newCfg.HttpOnly
+		out.httpOnlySet = true
+	} else if newCfg.HttpOnly {
 		out.HttpOnly = true
+		out.httpOnlySet = true
 	}
 	if newCfg.Upload != "" {
 		out.Upload = newCfg.Upload

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/infrago/infra"
 	. "github.com/infrago/base"
+	"github.com/infrago/infra"
 )
 
 type webUrl struct {
@@ -78,6 +78,7 @@ func (u *webUrl) Route(name string, values ...Map) string {
 			}
 		}
 	}
+	siteName = u.resolveSiteName(siteName)
 
 	if siteName != "" && siteName != currSite {
 		options["[site]"] = siteName
@@ -93,20 +94,7 @@ func (u *webUrl) Route(name string, values ...Map) string {
 		return name
 	}
 
-	info, ok := site.routerInfos[routeName]
-	if !ok {
-		// try method or index variants
-		if v, ok := site.routerInfos[routeName+".get.0"]; ok {
-			info = v
-			ok = true
-		} else if v, ok := site.routerInfos[routeName+".post.0"]; ok {
-			info = v
-			ok = true
-		} else if v, ok := site.routerInfos[routeName+".*.0"]; ok {
-			info = v
-			ok = true
-		}
-	}
+	info, ok := findRouteInfo(site, routeName)
 	if !ok {
 		return name
 	}
@@ -170,12 +158,50 @@ func (u *webUrl) Route(name string, values ...Map) string {
 	if siteOpt, ok := options["[site]"]; ok && siteOpt != nil {
 		siteName := siteName
 		if s, ok := siteOpt.(string); ok && s != "" {
-			siteName = s
+			siteName = u.resolveSiteName(s)
 		}
 		return u.Site(siteName, uri, options)
 	}
 
 	return uri
+}
+
+func findRouteInfo(site *Site, routeName string) (Info, bool) {
+	if site == nil || routeName == "" {
+		return Info{}, false
+	}
+
+	if info, ok := site.routerInfos[routeName]; ok {
+		return info, true
+	}
+
+	candidates := []string{
+		routeName + ".*",
+		routeName + ".get",
+		routeName + ".post",
+		routeName + ".put",
+		routeName + ".patch",
+		routeName + ".delete",
+		routeName + ".head",
+		routeName + ".options",
+	}
+	for _, key := range candidates {
+		if info, ok := site.routerInfos[key]; ok {
+			return info, true
+		}
+	}
+
+	for _, key := range site.routerOrder {
+		info, ok := site.routerInfos[key]
+		if !ok {
+			continue
+		}
+		if info.Router == routeName || strings.HasPrefix(info.Router, routeName+".") {
+			return info, true
+		}
+	}
+
+	return Info{}, false
 }
 
 // Site builds site base url with path.
@@ -185,6 +211,7 @@ func (u *webUrl) Site(name string, path string, options ...Map) string {
 		opts = options[0]
 	}
 
+	name = u.resolveSiteName(name)
 	site := module.sites[name]
 	if site == nil {
 		site = module.sites[infra.DEFAULT]
@@ -236,24 +263,7 @@ func (u *webUrl) Site(name string, path string, options ...Map) string {
 }
 
 func (u *webUrl) resolveSiteHost(name string, site *Site) string {
-	// 1) explicit site domain first
-	if site.Config.Domain != "" {
-		return normalizeHost(site.Config.Domain)
-	}
-	if len(site.Config.Domains) > 0 && site.Config.Domains[0] != "" {
-		return normalizeHost(site.Config.Domains[0])
-	}
-
-	// 2) global web domain fallback => <site>.<web.domain>
-	if module.config.Domain != "" {
-		base := normalizeHost(module.config.Domain)
-		if base != "" {
-			return normalizeHost(name + "." + base)
-		}
-	}
-
-	// 3) no domain configured: use current host's main domain tail
-	//    e.g. current www.dev.com + target file => file.dev.com
+	// Prefer current request domain tail first, so RouteUrl follows current domain.
 	if u.ctx != nil && u.ctx.Host != "" {
 		curr := normalizeHost(u.ctx.Host)
 		if tail := hostTail(curr); tail != "" {
@@ -261,11 +271,41 @@ func (u *webUrl) resolveSiteHost(name string, site *Site) string {
 		}
 	}
 
-	// 4) final fallback
+	// Fallback to explicit site domain
+	if site.Config.Domain != "" {
+		return normalizeHost(site.Config.Domain)
+	}
+	if len(site.Config.Domains) > 0 && site.Config.Domains[0] != "" {
+		return normalizeHost(site.Config.Domains[0])
+	}
+
+	// Global web domain fallback => <site>.<web.domain>
+	if module.config.Domain != "" {
+		base := normalizeHost(module.config.Domain)
+		if base != "" {
+			return normalizeHost(name + "." + base)
+		}
+	}
+
+	// Final fallback
 	if site.Config.Host != "" {
 		return normalizeHost(site.Config.Host)
 	}
 	return "localhost"
+}
+
+func (u *webUrl) resolveSiteName(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" {
+		return infra.DEFAULT
+	}
+	if _, ok := module.sites[name]; ok {
+		return name
+	}
+	if site, ok := module.siteAliases[normalizeAlias(name)]; ok && site != "" {
+		return site
+	}
+	return name
 }
 
 func hostTail(host string) string {
