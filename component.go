@@ -130,7 +130,7 @@ func (m *Module) RegisterHandler(name string, config Handler) {
 	}
 }
 
-func applyRouter(site *Site, routerName string, config Router) {
+func applyRouter(site *webSite, routerName string, config Router) {
 	routers := expandRouter(routerName, config)
 	storeRouters(site.routers, routers)
 }

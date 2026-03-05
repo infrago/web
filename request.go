@@ -16,7 +16,7 @@ import (
 )
 
 // preprocessing handles token and language.
-func (site *Site) preprocessing(ctx *Context) {
+func (site *webSite) preprocessing(ctx *Context) {
 	token := ""
 	if ctx.site.Config.Cookie != "" {
 		if c, e := ctx.reader.Cookie(ctx.site.Config.Cookie); e == nil {
@@ -79,7 +79,7 @@ func extractBearerToken(v string) string {
 }
 
 // finding handles static files.
-func (site *Site) finding(ctx *Context) {
+func (site *webSite) finding(ctx *Context) {
 	if ctx.Name == "" {
 		fsys := infra.AssetFS()
 		staticRoot := ctx.site.Config.Static
@@ -129,7 +129,7 @@ func (site *Site) finding(ctx *Context) {
 }
 
 // crossing handles CORS.
-func (site *Site) crossing(ctx *Context) {
+func (site *webSite) crossing(ctx *Context) {
 	cross := ctx.site.Cross
 	if !cross.Allow {
 		ctx.Next()
@@ -357,7 +357,7 @@ func wildcardHostMatch(host, base string) bool {
 }
 
 // authorizing handles authentication.
-func (site *Site) authorizing(ctx *Context) {
+func (site *webSite) authorizing(ctx *Context) {
 	if ctx.Config.Sign {
 		if !ctx.Signed() {
 			ctx.Unsign()
@@ -376,7 +376,7 @@ func (site *Site) authorizing(ctx *Context) {
 }
 
 // parsing parses request body.
-func (site *Site) parsing(ctx *Context) {
+func (site *webSite) parsing(ctx *Context) {
 	req := ctx.reader
 
 	// URL params
@@ -503,7 +503,7 @@ func (site *Site) parsing(ctx *Context) {
 }
 
 // arguing validates and maps arguments.
-func (site *Site) arguing(ctx *Context) {
+func (site *webSite) arguing(ctx *Context) {
 	if ctx.Config.Args != nil {
 		argsValue := Map{}
 		res := infra.Mapping(ctx.Config.Args, ctx.Value, argsValue, ctx.Config.Nullable, false, ctx.Timezone())

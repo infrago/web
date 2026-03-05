@@ -8,7 +8,7 @@ import (
 )
 
 func TestFindRouteInfoFallback(t *testing.T) {
-	site := &Site{
+	site := &webSite{
 		routerInfos: map[string]Info{
 			"home.*":     {Router: "home.*", Uri: "/"},
 			"user.get":   {Router: "user.get", Uri: "/user/{id}"},
@@ -40,7 +40,7 @@ func TestResolveSiteHostPrefersCurrentDomainTail(t *testing.T) {
 		module.config = oldConfig
 	}()
 
-	module.sites = map[string]*Site{
+	module.sites = map[string]*webSite{
 		infra.DEFAULT: {Name: infra.DEFAULT},
 		"api": {
 			Name:   "api",
@@ -55,7 +55,7 @@ func TestResolveSiteHostPrefersCurrentDomainTail(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "http://www.example.org/ping", nil)
 	req.Host = "www.example.org:8080"
 	ctx := &Context{
-		site: &Site{Name: "www"},
+		site: &webSite{Name: "www"},
 		Host: "www.example.org",
 	}
 	ctx.reader = req
@@ -78,7 +78,7 @@ func TestRouteUriAndRouteUrl(t *testing.T) {
 		module.config = oldConfig
 	}()
 
-	module.sites = map[string]*Site{
+	module.sites = map[string]*webSite{
 		infra.DEFAULT: {Name: infra.DEFAULT},
 		"www": {
 			Name: "www",
@@ -116,7 +116,7 @@ func TestContextRouteMethods(t *testing.T) {
 		module.config = oldConfig
 	}()
 
-	module.sites = map[string]*Site{
+	module.sites = map[string]*webSite{
 		"www": {
 			Name: "www",
 			Config: Config{
@@ -135,7 +135,7 @@ func TestContextRouteMethods(t *testing.T) {
 	module.config = Config{Port: 8090}
 
 	ctx := &Context{
-		site: &Site{Name: "www"},
+		site: &webSite{Name: "www"},
 		Name: "home",
 		Host: "www.example.org",
 	}

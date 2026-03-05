@@ -294,7 +294,7 @@ func (u *webUrl) RouteUrl(name string, values ...Map) string {
 	return u.Route(name, vals)
 }
 
-func findRouteInfo(site *Site, routeName string) (Info, bool) {
+func findRouteInfo(site *webSite, routeName string) (Info, bool) {
 	if site == nil || routeName == "" {
 		return Info{}, false
 	}
@@ -395,7 +395,7 @@ func (u *webUrl) SiteUrl(name, path string, options ...Map) string {
 	return u.Site(name, path, options...)
 }
 
-func (u *webUrl) resolveSiteHost(name string, site *Site) string {
+func (u *webUrl) resolveSiteHost(name string, site *webSite) string {
 	// Prefer current request domain tail first, so RouteUrl follows current domain.
 	if u.ctx != nil && u.ctx.Host != "" {
 		curr := normalizeHost(u.ctx.Host)

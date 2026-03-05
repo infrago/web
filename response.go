@@ -56,7 +56,7 @@ type (
 	httpStatusBody string
 )
 
-func (site *Site) bodyFail(ctx *Context, err error) {
+func (site *webSite) bodyFail(ctx *Context, err error) {
 	if err == nil {
 		return
 	}
@@ -89,7 +89,7 @@ func (site *Site) bodyFail(ctx *Context, err error) {
 	site.body(ctx)
 }
 
-func (site *Site) body(ctx *Context) {
+func (site *webSite) body(ctx *Context) {
 	if ctx.Code <= 0 {
 		ctx.Code = StatusOK
 	}
@@ -169,7 +169,7 @@ func (site *Site) body(ctx *Context) {
 	}
 }
 
-func (site *Site) bodyDefault(ctx *Context) {
+func (site *webSite) bodyDefault(ctx *Context) {
 	if ctx.Code <= 0 {
 		ctx.Code = StatusNotFound
 		http.NotFound(ctx.writer, ctx.reader)
@@ -179,7 +179,7 @@ func (site *Site) bodyDefault(ctx *Context) {
 	}
 }
 
-func (site *Site) bodyStatus(ctx *Context, body httpStatusBody) {
+func (site *webSite) bodyStatus(ctx *Context, body httpStatusBody) {
 	if ctx.Code <= 0 {
 		ctx.Code = StatusNotFound
 		http.NotFound(ctx.writer, ctx.reader)
@@ -192,14 +192,14 @@ func (site *Site) bodyStatus(ctx *Context, body httpStatusBody) {
 	}
 }
 
-func (site *Site) bodyGoto(ctx *Context, body httpGotoBody) {
+func (site *webSite) bodyGoto(ctx *Context, body httpGotoBody) {
 	if ctx.Code <= 0 {
 		ctx.Code = StatusFound
 	}
 	http.Redirect(ctx.writer, ctx.reader, body.url, StatusFound)
 }
 
-func (site *Site) bodyText(ctx *Context, body httpTextBody) {
+func (site *webSite) bodyText(ctx *Context, body httpTextBody) {
 	res := ctx.writer
 
 	if ctx.Type == "" {
@@ -215,7 +215,7 @@ func (site *Site) bodyText(ctx *Context, body httpTextBody) {
 	}
 }
 
-func (site *Site) bodyHtml(ctx *Context, body httpHtmlBody) {
+func (site *webSite) bodyHtml(ctx *Context, body httpHtmlBody) {
 	res := ctx.writer
 
 	if ctx.Type == "" {
@@ -231,7 +231,7 @@ func (site *Site) bodyHtml(ctx *Context, body httpHtmlBody) {
 	}
 }
 
-func (site *Site) bodyJson(ctx *Context, body httpJsonBody) {
+func (site *webSite) bodyJson(ctx *Context, body httpJsonBody) {
 	res := ctx.writer
 
 	if ctx.Type == "" {
@@ -252,7 +252,7 @@ func (site *Site) bodyJson(ctx *Context, body httpJsonBody) {
 	}
 }
 
-func (site *Site) bodyJsonp(ctx *Context, body httpJsonpBody) {
+func (site *webSite) bodyJsonp(ctx *Context, body httpJsonpBody) {
 	res := ctx.writer
 
 	if ctx.Type == "" {
@@ -274,7 +274,7 @@ func (site *Site) bodyJsonp(ctx *Context, body httpJsonpBody) {
 	}
 }
 
-func (site *Site) bodyEcho(ctx *Context, body httpEchoBody) {
+func (site *webSite) bodyEcho(ctx *Context, body httpEchoBody) {
 	result := Map{
 		"code": body.code,
 		"time": time.Now().Unix(),
@@ -291,7 +291,7 @@ func (site *Site) bodyEcho(ctx *Context, body httpEchoBody) {
 	site.bodyJson(ctx, httpJsonBody{result})
 }
 
-func (site *Site) bodyFile(ctx *Context, body httpFileBody) {
+func (site *webSite) bodyFile(ctx *Context, body httpFileBody) {
 	req, res := ctx.reader, ctx.writer
 
 	if ctx.Type == "" {
@@ -308,7 +308,7 @@ func (site *Site) bodyFile(ctx *Context, body httpFileBody) {
 	http.ServeFile(res, req, body.file)
 }
 
-func (site *Site) bodyBinary(ctx *Context, body httpBinaryBody) {
+func (site *webSite) bodyBinary(ctx *Context, body httpBinaryBody) {
 	res := ctx.writer
 
 	if ctx.Type == "" {
@@ -328,7 +328,7 @@ func (site *Site) bodyBinary(ctx *Context, body httpBinaryBody) {
 	}
 }
 
-func (site *Site) bodyBuffer(ctx *Context, body httpBufferBody) {
+func (site *webSite) bodyBuffer(ctx *Context, body httpBufferBody) {
 	res := ctx.writer
 
 	if ctx.Type == "" {
@@ -353,7 +353,7 @@ func (site *Site) bodyBuffer(ctx *Context, body httpBufferBody) {
 	body.buffer.Close()
 }
 
-func (site *Site) bodyView(ctx *Context, body httpViewBody) {
+func (site *webSite) bodyView(ctx *Context, body httpViewBody) {
 	res := ctx.writer
 
 	viewData := Map{
@@ -388,7 +388,7 @@ func (site *Site) bodyView(ctx *Context, body httpViewBody) {
 	}
 }
 
-func (site *Site) viewHelpers(ctx *Context) Map {
+func (site *webSite) viewHelpers(ctx *Context) Map {
 	zone := ctx.Timezone()
 	return Map{
 		"language": func() string {

@@ -29,7 +29,7 @@ var module = &Module{
 	routers:       make(map[string]Router),
 	filters:       make(map[string]Filter),
 	handlers:      make(map[string]Handler),
-	sites:         make(map[string]*Site),
+	sites:         make(map[string]*webSite),
 	siteAliases:   make(map[string]string),
 	defaultSite:   infra.DEFAULT,
 }
@@ -56,7 +56,7 @@ type (
 		filters  map[string]Filter
 		handlers map[string]Handler
 
-		sites       map[string]*Site
+		sites       map[string]*webSite
 		siteAliases map[string]string
 		defaultSite string
 
@@ -98,6 +98,8 @@ type (
 	}
 
 	Configs map[string]Config
+	Site    Config
+	Sites   map[string]Site
 
 	Cross struct {
 		Allow   bool
@@ -116,7 +118,7 @@ type (
 		Delegate Delegate
 	}
 
-	Site struct {
+	webSite struct {
 		Name    string
 		Config  Config
 		Cross   Cross
@@ -154,6 +156,12 @@ func (m *Module) Register(name string, value Any) {
 		m.RegisterConfig(name, v)
 	case Configs:
 		m.RegisterConfigs(v)
+	case Site:
+		m.RegisterConfig(name, Config(v))
+	case Sites:
+		for siteName, site := range v {
+			m.RegisterConfig(siteName, Config(site))
+		}
 	case Router:
 		m.RegisterRouter(name, v)
 	case Routers:
@@ -353,7 +361,7 @@ func (m *Module) Setup() {
 		}
 	}
 
-	m.sites = make(map[string]*Site, len(names))
+	m.sites = make(map[string]*webSite, len(names))
 	m.siteAliases = make(map[string]string, len(names)*2)
 	m.defaultSite = infra.DEFAULT
 
@@ -365,7 +373,7 @@ func (m *Module) Setup() {
 		m.applyDefaults(&baseCfg)
 		m.applySiteDefaults(name, &baseCfg)
 
-		site := &Site{
+		site := &webSite{
 			Name:     name,
 			Config:   baseCfg,
 			Cross:    m.cross,
@@ -488,7 +496,7 @@ func (m *Module) applySiteDefaults(name string, cfg *Config) {
 	}
 }
 
-func (m *Module) buildSite(site *Site) {
+func (m *Module) buildSite(site *webSite) {
 	site.routerInfos = make(map[string]Info)
 	keys := make([]string, 0, len(site.routers))
 	for key := range site.routers {

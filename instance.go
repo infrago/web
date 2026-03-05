@@ -10,7 +10,7 @@ import (
 	"github.com/infrago/infra"
 )
 
-func (site *Site) newContext() *Context {
+func (site *webSite) newContext() *Context {
 	return &Context{
 		site:        site,
 		Meta:        infra.NewMeta(),
@@ -30,14 +30,14 @@ func (site *Site) newContext() *Context {
 	}
 }
 
-func (site *Site) close(ctx *Context) {
+func (site *webSite) close(ctx *Context) {
 	for _, file := range ctx.uploadfiles {
 		os.Remove(file)
 	}
 }
 
 // Serve handles incoming HTTP request.
-func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *http.Request) {
+func (site *webSite) Serve(name string, params Map, res http.ResponseWriter, req *http.Request) {
 	ctx := site.newContext()
 	out := wrapResponseWriter(res)
 
@@ -105,7 +105,7 @@ func (site *Site) Serve(name string, params Map, res http.ResponseWriter, req *h
 	site.close(ctx)
 }
 
-func (site *Site) open(ctx *Context) {
+func (site *webSite) open(ctx *Context) {
 	ctx.clear()
 
 	ctx.next(site.preprocessing)
@@ -115,7 +115,7 @@ func (site *Site) open(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) serve(ctx *Context) {
+func (site *webSite) serve(ctx *Context) {
 	ctx.clear()
 
 	ctx.next(site.finding)
@@ -128,7 +128,7 @@ func (site *Site) serve(ctx *Context) {
 	site.response(ctx)
 }
 
-func (site *Site) handle(ctx *Context) {
+func (site *webSite) handle(ctx *Context) {
 	handling := ctx.handling
 	ctx.handling = ""
 	switch handling {
@@ -147,7 +147,7 @@ func (site *Site) handle(ctx *Context) {
 	}
 }
 
-func (site *Site) request(ctx *Context) {
+func (site *webSite) request(ctx *Context) {
 	ctx.clear()
 
 	ctx.next(site.crossing)
@@ -159,7 +159,7 @@ func (site *Site) request(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) execute(ctx *Context) {
+func (site *webSite) execute(ctx *Context) {
 	ctx.clear()
 
 	ctx.next(site.executeFilters...)
@@ -173,7 +173,7 @@ func (site *Site) execute(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) response(ctx *Context) {
+func (site *webSite) response(ctx *Context) {
 	ctx.clear()
 
 	ctx.next(site.responseFilters...)
@@ -181,7 +181,7 @@ func (site *Site) response(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) notFound(ctx *Context) {
+func (site *webSite) notFound(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
@@ -197,11 +197,11 @@ func (site *Site) notFound(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) foundDefault(ctx *Context) {
+func (site *webSite) foundDefault(ctx *Context) {
 	ctx.Text("Not Found", StatusNotFound)
 }
 
-func (site *Site) error(ctx *Context) {
+func (site *webSite) error(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
@@ -217,11 +217,11 @@ func (site *Site) error(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) errorDefault(ctx *Context) {
+func (site *webSite) errorDefault(ctx *Context) {
 	ctx.Text("Internal Server Error", StatusInternalServerError)
 }
 
-func (site *Site) failed(ctx *Context) {
+func (site *webSite) failed(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
@@ -237,11 +237,11 @@ func (site *Site) failed(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) failedDefault(ctx *Context) {
+func (site *webSite) failedDefault(ctx *Context) {
 	ctx.Text("Bad Request", StatusBadRequest)
 }
 
-func (site *Site) denied(ctx *Context) {
+func (site *webSite) denied(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
@@ -257,7 +257,7 @@ func (site *Site) denied(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) unsigned(ctx *Context) {
+func (site *webSite) unsigned(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
@@ -274,7 +274,7 @@ func (site *Site) unsigned(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) unauthed(ctx *Context) {
+func (site *webSite) unauthed(ctx *Context) {
 	ctx.clear()
 
 	if ctx.Code <= 0 {
@@ -291,6 +291,6 @@ func (site *Site) unauthed(ctx *Context) {
 	ctx.Next()
 }
 
-func (site *Site) deniedDefault(ctx *Context) {
+func (site *webSite) deniedDefault(ctx *Context) {
 	ctx.Text("Unauthorized", StatusUnauthorized)
 }

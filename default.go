@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/infrago/base"
 	"github.com/gorilla/mux"
+	. "github.com/infrago/base"
 )
 
 func init() {

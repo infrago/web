@@ -107,3 +107,20 @@ func TestSelectSiteForRequestUsesAliasWhenMatched(t *testing.T) {
 		t.Fatalf("expected router name ping.*, got %q", router)
 	}
 }
+
+func TestRegisterSiteTypeCompatibility(t *testing.T) {
+	oldOpen := module.opened
+	oldConfigs := module.configs
+	defer func() {
+		module.opened = oldOpen
+		module.configs = oldConfigs
+	}()
+
+	module.opened = false
+	module.configs = map[string]Config{}
+
+	module.Register("www", Site{})
+	if _, ok := module.configs["www"]; !ok {
+		t.Fatalf("expected web.Site{} registration to map into configs[\"www\"]")
+	}
+}

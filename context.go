@@ -15,7 +15,7 @@ import (
 
 type (
 	Context struct {
-		site *Site
+		site *webSite
 		*infra.Meta
 
 		uploadfiles []string
