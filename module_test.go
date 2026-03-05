@@ -32,22 +32,45 @@ func TestParseConfigAliasAndDomainLists(t *testing.T) {
 
 func TestMergeConfigAllowsBoolFalseOverride(t *testing.T) {
 	base := Config{
-		Token:       true,
-		Crypto:      true,
-		HttpOnly:    true,
-		tokenSet:    true,
-		cryptoSet:   true,
-		httpOnlySet: true,
+		Token:               true,
+		Crypto:              true,
+		HttpOnly:            true,
+		AnswerDataEncode:    true,
+		tokenSet:            true,
+		cryptoSet:           true,
+		httpOnlySet:         true,
+		answerDataEncodeSet: true,
 	}
 
 	out := mergeConfig(base, parseConfig(Map{
-		"token":    false,
-		"crypto":   false,
-		"httponly": false,
+		"token":        false,
+		"crypto":       false,
+		"httponly":     false,
+		"answerencode": false,
 	}))
 
-	if out.Token || out.Crypto || out.HttpOnly {
-		t.Fatalf("expected bools to be overridden to false, got token=%v crypto=%v httponly=%v", out.Token, out.Crypto, out.HttpOnly)
+	if out.Token || out.Crypto || out.HttpOnly || out.AnswerDataEncode {
+		t.Fatalf("expected bools to be overridden to false, got token=%v crypto=%v httponly=%v answerencode=%v", out.Token, out.Crypto, out.HttpOnly, out.AnswerDataEncode)
+	}
+}
+
+func TestParseConfigSupportsCodecAndAnswerMap(t *testing.T) {
+	cfg := parseConfig(Map{
+		"answerencode": true,
+		"codec":        "codec_a",
+	})
+	if !cfg.AnswerDataEncode || cfg.AnswerDataCodec != "codec_a" {
+		t.Fatalf("expected codec key to work, got encode=%v codec=%q", cfg.AnswerDataEncode, cfg.AnswerDataCodec)
+	}
+
+	cfg = parseConfig(Map{
+		"answer": Map{
+			"encode": false,
+			"codec":  "codec_b",
+		},
+	})
+	if cfg.AnswerDataEncode || cfg.AnswerDataCodec != "codec_b" {
+		t.Fatalf("expected answer map parse, got encode=%v codec=%q", cfg.AnswerDataEncode, cfg.AnswerDataCodec)
 	}
 }
 
