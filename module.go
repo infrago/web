@@ -795,14 +795,8 @@ func parseConfig(conf Map) Config {
 	if v, ok := conf["driver"].(string); ok && v != "" {
 		cfg.Driver = strings.ToLower(v)
 	}
-	if v, ok := conf["port"].(int); ok {
-		cfg.Port = v
-	}
-	if v, ok := conf["port"].(int64); ok {
-		cfg.Port = int(v)
-	}
-	if v, ok := conf["port"].(float64); ok {
-		cfg.Port = int(v)
+	if port, ok := parsePort(conf["port"]); ok {
+		cfg.Port = port
 	}
 	if v, ok := conf["host"].(string); ok {
 		cfg.Host = v
@@ -883,6 +877,47 @@ func parseDuration(val Any) time.Duration {
 		}
 	}
 	return 0
+}
+
+func parsePort(val Any) (int, bool) {
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case int8:
+		return int(v), true
+	case int16:
+		return int(v), true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case uint:
+		return int(v), true
+	case uint8:
+		return int(v), true
+	case uint16:
+		return int(v), true
+	case uint32:
+		return int(v), true
+	case uint64:
+		return int(v), true
+	case float32:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return 0, false
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	default:
+		return 0, false
+	}
 }
 
 func mergeConfig(baseCfg, newCfg Config) Config {
