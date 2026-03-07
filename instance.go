@@ -118,6 +118,7 @@ func (site *webSite) open(ctx *Context) {
 func (site *webSite) serve(ctx *Context) {
 	ctx.clear()
 
+	ctx.next(site.crossing)
 	ctx.next(site.finding)
 	ctx.next(site.requestFilters...)
 	ctx.next(site.request)
@@ -150,10 +151,10 @@ func (site *webSite) handle(ctx *Context) {
 func (site *webSite) request(ctx *Context) {
 	ctx.clear()
 
-	ctx.next(site.crossing)
 	ctx.next(site.parsing)
 	ctx.next(site.authorizing)
 	ctx.next(site.arguing)
+	ctx.next(site.loading)
 	ctx.next(site.execute)
 
 	ctx.Next()

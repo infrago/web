@@ -15,6 +15,11 @@ import (
 	"github.com/infrago/infra"
 )
 
+var (
+	resLoadEmpty = infra.Result(-1, "web.load.empty", "empty load.")
+	resLoadError = infra.Result(-1, "web.load.error", "error load.")
+)
+
 // preprocessing handles token and language.
 func (site *webSite) preprocessing(ctx *Context) {
 	token := ""
@@ -515,5 +520,57 @@ func (site *webSite) arguing(ctx *Context) {
 			ctx.Args[k] = v
 		}
 	}
+	ctx.Next()
+}
+
+func (site *webSite) loading(ctx *Context) {
+	if len(ctx.Config.Loading) == 0 {
+		ctx.Next()
+		return
+	}
+
+	for key, loader := range ctx.Config.Loading {
+		valueKey := strings.TrimSpace(loader.Value)
+		if valueKey == "" {
+			valueKey = "id"
+		}
+
+		value, ok := ctx.Args[valueKey]
+		if !ok {
+			value, ok = ctx.Value[valueKey]
+		}
+
+		if value == nil && loader.Required {
+			if loader.Empty != nil {
+				ctx.Fail(loader.Empty)
+			} else {
+				ctx.Fail(resLoadEmpty)
+			}
+			return
+		}
+
+		target := strings.TrimSpace(loader.Invoke)
+		if target == "" || value == nil {
+			continue
+		}
+
+		argsKey := strings.TrimSpace(loader.Args)
+		if argsKey == "" {
+			argsKey = "id"
+		}
+
+		item := ctx.Invoke(target, Map{argsKey: value})
+		if (item == nil || (ctx.Result() != nil && ctx.Result().Fail())) && loader.Required {
+			if loader.Error != nil {
+				ctx.Fail(loader.Error)
+			} else {
+				ctx.Fail(resLoadError)
+			}
+			return
+		}
+
+		ctx.Locals[key] = item
+	}
+
 	ctx.Next()
 }

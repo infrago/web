@@ -44,17 +44,24 @@ driver = "default"
 
 - `Serve(name string, params Map, res http.ResponseWriter, req *http.Request)`
 
+## 站点跨域配置
+
+跨域只支持站点级配置，不支持全局 `[cross]` / `[web.cross]`。
+
+- `[site.xxx.cross]`
+- 或 `cross = { enable = true, ... }`
+
+常用键：
+
+- `allow` / `enable`
+- `method` / `methods`
+- `origin` / `origins`
+- `header` / `headers`
+
 ## 全局配置项（所有配置键）
 
 配置段：`[web]`
 
-- `allow`
-- `method`
-- `methods`
-- `origin`
-- `origins`
-- `header`
-- `headers`
 - `driver`
 - `port`
 - `host`

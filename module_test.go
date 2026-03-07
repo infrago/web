@@ -147,3 +147,42 @@ func TestRegisterSiteTypeCompatibility(t *testing.T) {
 		t.Fatalf("expected web.Site{} registration to map into configs[\"www\"]")
 	}
 }
+
+func TestConfigParsesSiteCrossOnly(t *testing.T) {
+	m := &Module{
+		defaultConfig: Config{},
+		configs:       map[string]Config{},
+		crosses:       map[string]Cross{},
+	}
+
+	m.Config(Map{
+		"cross": Map{
+			"allow": true,
+		},
+		"site": Map{
+			"sys": Map{
+				"name": "system",
+				"cross": Map{
+					"enable":  true,
+					"origin":  "https://console.example.com",
+					"methods": []Any{"OPTIONS", "POST"},
+				},
+			},
+		},
+	})
+
+	if _, ok := m.crosses[infra.DEFAULT]; ok {
+		t.Fatalf("expected global cross config to be ignored for web")
+	}
+
+	cross := m.crosses["sys"]
+	if !cross.Allow {
+		t.Fatalf("expected site.sys cross to enable allow")
+	}
+	if cross.Origin != "https://console.example.com" {
+		t.Fatalf("expected site.sys cross origin to be parsed, got %q", cross.Origin)
+	}
+	if len(cross.Methods) != 2 || cross.Methods[0] != "OPTIONS" || cross.Methods[1] != "POST" {
+		t.Fatalf("unexpected site.sys cross methods: %#v", cross.Methods)
+	}
+}

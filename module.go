@@ -23,9 +23,9 @@ func init() {
 
 var module = &Module{
 	defaultConfig: Config{Driver: DEFAULT, Charset: UTF8, Port: 8080},
-	cross:         Cross{Allow: true},
 	drivers:       make(map[string]Driver),
 	configs:       make(map[string]Config),
+	crosses:       make(map[string]Cross),
 	routers:       make(map[string]Router),
 	filters:       make(map[string]Filter),
 	handlers:      make(map[string]Handler),
@@ -46,11 +46,11 @@ type (
 		started bool
 
 		defaultConfig Config
-		cross         Cross
 
 		drivers map[string]Driver
 		config  Config
 		configs map[string]Config
+		crosses map[string]Cross
 
 		routers  map[string]Router
 		filters  map[string]Filter
@@ -250,10 +250,14 @@ func (m *Module) Config(global Map) {
 			root := Map{}
 			for key, val := range cfgMap {
 				if key == "site" || key == "sites" {
-					if siteMap, ok := val.(Map); ok {
+					if siteMap, ok := crossMapValue(val); ok {
 						siteRoot := Map{}
 						for siteName, siteVal := range siteMap {
-							if conf, ok := siteVal.(Map); ok {
+							if conf, ok := crossMapValue(siteVal); ok {
+								if siteName == "cross" {
+									m.configureSiteCross(infra.DEFAULT, conf)
+									continue
+								}
 								m.configureSite(siteName, conf)
 							} else {
 								siteRoot[siteName] = siteVal
@@ -272,10 +276,14 @@ func (m *Module) Config(global Map) {
 	}
 
 	if siteAny, ok := global["site"]; ok {
-		if siteMap, ok := siteAny.(Map); ok && siteMap != nil {
+		if siteMap, ok := crossMapValue(siteAny); ok && siteMap != nil {
 			root := Map{}
 			for key, val := range siteMap {
-				if conf, ok := val.(Map); ok {
+				if conf, ok := crossMapValue(val); ok {
+					if key == "cross" {
+						m.configureSiteCross(infra.DEFAULT, conf)
+						continue
+					}
 					m.configureSite(key, conf)
 				} else {
 					root[key] = val
@@ -287,35 +295,6 @@ func (m *Module) Config(global Map) {
 		}
 	}
 
-	if crossAny, ok := global["cross"]; ok {
-		if crossMap, ok := crossAny.(Map); ok && crossMap != nil {
-			m.configureCross(crossMap)
-		}
-	}
-}
-
-func (m *Module) configureCross(conf Map) {
-	if v, ok := conf["allow"].(bool); ok {
-		m.cross.Allow = v
-	}
-	if v, ok := conf["method"].(string); ok {
-		m.cross.Method = v
-	}
-	if vals := parseStringList(conf["methods"]); len(vals) > 0 {
-		m.cross.Methods = vals
-	}
-	if v, ok := conf["origin"].(string); ok {
-		m.cross.Origin = v
-	}
-	if vals := parseStringList(conf["origins"]); len(vals) > 0 {
-		m.cross.Origins = vals
-	}
-	if v, ok := conf["header"].(string); ok {
-		m.cross.Header = v
-	}
-	if vals := parseStringList(conf["headers"]); len(vals) > 0 {
-		m.cross.Headers = vals
-	}
 }
 
 func (m *Module) configureRoot(conf Map) {
@@ -326,9 +305,24 @@ func (m *Module) configureRoot(conf Map) {
 
 func (m *Module) configureSite(name string, conf Map) {
 	name = strings.ToLower(name)
+	if crossConf, ok := crossMapValue(conf["cross"]); ok && crossConf != nil {
+		m.configureSiteCross(name, crossConf)
+	}
 	cfg := mergeConfig(mergeConfig(m.defaultConfig, m.config), m.configs[name])
 	cfg = mergeConfig(cfg, parseConfig(conf))
 	m.configs[name] = cfg
+}
+
+func (m *Module) configureSiteCross(name string, conf Map) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		name = infra.DEFAULT
+	}
+	if m.crosses == nil {
+		m.crosses = make(map[string]Cross)
+	}
+	cross := mergeCross(m.crosses[name], conf)
+	m.crosses[name] = cross
 }
 
 // Setup initializes defaults and sites.
@@ -381,7 +375,7 @@ func (m *Module) Setup() {
 		site := &webSite{
 			Name:     name,
 			Config:   baseCfg,
-			Cross:    m.cross,
+			Cross:    m.crosses[name],
 			Setting:  baseCfg.Setting,
 			routers:  make(map[string]Router),
 			filters:  make(map[string]Filter),
@@ -1230,4 +1224,44 @@ func splitPrefix(name string) (string, string) {
 		return parts[0], parts[1]
 	}
 	return infra.DEFAULT, name
+}
+
+func crossMapValue(value Any) (Map, bool) {
+	switch v := value.(type) {
+	case Map:
+		return v, v != nil
+	default:
+		return nil, false
+	}
+}
+
+func mergeCross(base Cross, conf Map) Cross {
+	out := base
+
+	if v, ok := conf["allow"].(bool); ok {
+		out.Allow = v
+	}
+	if v, ok := conf["enable"].(bool); ok {
+		out.Allow = v
+	}
+	if v, ok := conf["method"].(string); ok {
+		out.Method = v
+	}
+	if vals := parseStringList(conf["methods"]); len(vals) > 0 {
+		out.Methods = vals
+	}
+	if v, ok := conf["origin"].(string); ok {
+		out.Origin = v
+	}
+	if vals := parseStringList(conf["origins"]); len(vals) > 0 {
+		out.Origins = vals
+	}
+	if v, ok := conf["header"].(string); ok {
+		out.Header = v
+	}
+	if vals := parseStringList(conf["headers"]); len(vals) > 0 {
+		out.Headers = vals
+	}
+
+	return out
 }
