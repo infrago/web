@@ -29,7 +29,6 @@ var module = &Module{
 	routers:       make(map[string]Router),
 	filters:       make(map[string]Filter),
 	handlers:      make(map[string]Handler),
-	endpoints:     make(map[string]Endpoint),
 	sites:         make(map[string]*webSite),
 	siteAliases:   make(map[string]string),
 	defaultSite:   infra.DEFAULT,
@@ -53,10 +52,9 @@ type (
 		configs map[string]Config
 		crosses map[string]Cross
 
-		routers   map[string]Router
-		filters   map[string]Filter
-		handlers  map[string]Handler
-		endpoints map[string]Endpoint
+		routers  map[string]Router
+		filters  map[string]Filter
+		handlers map[string]Handler
 
 		sites       map[string]*webSite
 		siteAliases map[string]string
@@ -177,8 +175,6 @@ func (m *Module) Register(name string, value Any) {
 		m.RegisterFilter(name, v)
 	case Handler:
 		m.RegisterHandler(name, v)
-	case Endpoint:
-		m.RegisterEndpoint(name, v)
 	}
 }
 
@@ -1268,21 +1264,4 @@ func mergeCross(base Cross, conf Map) Cross {
 	}
 
 	return out
-}
-
-func (m *Module) endpoint(name string) (Endpoint, bool) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if len(m.endpoints) == 0 {
-		return Endpoint{}, false
-	}
-
-	if name == "" {
-		name = infra.DEFAULT
-	}
-	name = strings.TrimSpace(strings.ToLower(name))
-
-	endpoint, ok := m.endpoints[name]
-	return endpoint, ok
 }
