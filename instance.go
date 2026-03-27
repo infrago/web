@@ -175,6 +175,10 @@ func (site *webSite) execute(ctx *Context) {
 }
 
 func (site *webSite) response(ctx *Context) {
+	if ctx.upgraded {
+		return
+	}
+
 	ctx.clear()
 
 	ctx.next(site.responseFilters...)

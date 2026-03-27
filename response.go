@@ -94,6 +94,10 @@ func (site *webSite) bodyFail(ctx *Context, err error) {
 }
 
 func (site *webSite) body(ctx *Context) {
+	if ctx.upgraded {
+		return
+	}
+
 	if ctx.Code <= 0 {
 		ctx.Code = StatusOK
 	}

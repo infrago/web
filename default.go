@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	. "github.com/infrago/base"
+	"github.com/infrago/ws"
 )
 
 func init() {
@@ -25,6 +27,10 @@ type (
 		server   *http.Server
 		router   *mux.Router
 		routes   map[string]*mux.Route
+	}
+
+	defaultSocketConn struct {
+		conn *websocket.Conn
 	}
 )
 
@@ -89,6 +95,18 @@ func (c *defaultConnect) Register(name string, info Info, hosts []string) error 
 	return nil
 }
 
+func (c *defaultConnect) Upgrade(res http.ResponseWriter, req *http.Request) (ws.Conn, error) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin:       func(*http.Request) bool { return true },
+		EnableCompression: ws.CompressionEnabled(),
+	}
+	conn, err := upgrader.Upgrade(res, req, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &defaultSocketConn{conn: conn}, nil
+}
+
 func (c *defaultConnect) Start() error {
 	if c.server == nil {
 		panic("Invalid web server")
@@ -146,4 +164,44 @@ func normalizeHostPattern(host string) string {
 		return "{subdomain:[^.]+}" + host[1:]
 	}
 	return host
+}
+
+func (c *defaultSocketConn) ReadMessage() (int, []byte, error) {
+	return c.conn.ReadMessage()
+}
+
+func (c *defaultSocketConn) WriteMessage(messageType int, data []byte) error {
+	return c.conn.WriteMessage(messageType, data)
+}
+
+func (c *defaultSocketConn) Close() error {
+	return c.conn.Close()
+}
+
+func (c *defaultSocketConn) Raw() Any {
+	return c.conn
+}
+
+func (c *defaultSocketConn) SetReadDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+func (c *defaultSocketConn) SetWriteDeadline(t time.Time) error {
+	return c.conn.SetWriteDeadline(t)
+}
+
+func (c *defaultSocketConn) SetReadLimit(limit int64) {
+	c.conn.SetReadLimit(limit)
+}
+
+func (c *defaultSocketConn) SetPongHandler(fn func(string) error) {
+	c.conn.SetPongHandler(fn)
+}
+
+func (c *defaultSocketConn) EnableWriteCompression(enabled bool) {
+	c.conn.EnableWriteCompression(enabled)
+}
+
+func (c *defaultSocketConn) SetCompressionLevel(level int) error {
+	return c.conn.SetCompressionLevel(level)
 }
