@@ -15,3 +15,7 @@ func (Site) RegistryComponent() string {
 func (Sites) RegistryComponent() string {
 	return "web"
 }
+
+func (Endpoint) RegistryComponent() string {
+	return "web"
+}
